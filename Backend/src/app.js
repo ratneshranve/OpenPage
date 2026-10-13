@@ -34,7 +34,11 @@ app.use(
 const allowedOrigins = new Set([config.frontendUrl, config.appBaseUrl, ...config.corsAllowedOrigins].filter(Boolean));
 app.use(
     cors({
-        origin: (origin, cb) => cb(null, !origin || allowedOrigins.has(origin)),
+        origin: (origin, cb) => {
+            if (!origin || allowedOrigins.has(origin)) return cb(null, true);
+            if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) return cb(null, true);
+            return cb(null, false);
+        },
         credentials: true,
         allowedHeaders: ['Content-Type', 'X-CSRF-Token', 'X-Checkout-Session'],
         methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
