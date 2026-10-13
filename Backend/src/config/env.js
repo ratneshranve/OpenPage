@@ -34,6 +34,7 @@ export const config = {
     appBaseUrl: trimSlash(str('APP_BASE_URL', frontendUrl)),
     serveFrontend: bool('SERVE_FRONTEND', false),
     trustProxy: num('TRUST_PROXY', 1),
+    cookieSameSite: str('COOKIE_SAME_SITE', nodeEnv === 'production' ? 'none' : 'lax').toLowerCase(),
 
     mongodbUri: str('MONGODB_URI'),
 

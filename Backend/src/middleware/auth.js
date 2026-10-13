@@ -7,11 +7,14 @@ export const ACCESS_COOKIE = 'op_at';
 export const REFRESH_COOKIE = 'op_rt';
 export const CSRF_COOKIE = 'op_csrf';
 
-export const cookieBase = () => ({
-    httpOnly: true,
-    secure: config.isProduction,
-    sameSite: 'lax',
-});
+export const cookieBase = () => {
+    const sameSite = config.cookieSameSite || (config.isProduction ? 'none' : 'lax');
+    return {
+        httpOnly: true,
+        secure: sameSite === 'none' ? true : config.isProduction,
+        sameSite,
+    };
+};
 
 const readAccessToken = (req) => req.cookies?.[ACCESS_COOKIE] || null;
 
