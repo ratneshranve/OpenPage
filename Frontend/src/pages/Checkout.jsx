@@ -573,10 +573,13 @@ export default function Checkout() {
 
                         <div className="border-t border-line pt-4 text-left space-y-3">
                             <Input
+                                id="utr-input"
                                 label="Enter 12-digit UPI Reference / UTR Number"
                                 placeholder="e.g. 428901234567"
                                 value={utr}
                                 onChange={(e) => setUtr(e.target.value.replace(/\s+/g, ''))}
+                                autoComplete="off"
+                                autoFocus
                                 hint="Found in your UPI transaction receipt or bank SMS after paying."
                             />
                             <Button

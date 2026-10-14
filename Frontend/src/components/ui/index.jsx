@@ -186,19 +186,26 @@ export function Alert({ tone = 'info', title, children, className, action }) {
 
 export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
     const ref = useRef(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
     useEffect(() => {
         if (!open) return undefined;
         const prev = document.activeElement;
-        const onKey = (e) => e.key === 'Escape' && onClose?.();
+        const onKey = (e) => e.key === 'Escape' && onCloseRef.current?.();
         document.addEventListener('keydown', onKey);
         document.body.style.overflow = 'hidden';
-        ref.current?.focus();
+
+        if (!ref.current?.contains(document.activeElement)) {
+            ref.current?.focus();
+        }
+
         return () => {
             document.removeEventListener('keydown', onKey);
             document.body.style.overflow = '';
             prev?.focus?.();
         };
-    }, [open, onClose]);
+    }, [open]);
     if (!open) return null;
     const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
     return (
