@@ -31,9 +31,9 @@ const main = async () => {
     if (!config.mongodbUri) throw new Error('MONGODB_URI is not set');
     const email = normalizeEmail(arg('email') || (await prompt('Admin email: ')));
     const name = arg('name') || 'Administrator';
-    const password = process.env.ADMIN_PASSWORD || (await prompt('Admin password (min 12 chars, letters and numbers): '));
+    const password = process.env.ADMIN_PASSWORD || arg('password') || (await prompt('Admin password: '));
     if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Invalid email');
-    if (password.length < 12 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) throw new Error('Password must be at least 12 characters and include letters and numbers');
+    if (!password || password.length < 6) throw new Error('Password must be at least 6 characters');
 
     await connectDB();
     const user = (await User.findOne({ email })) || new User({ email });
