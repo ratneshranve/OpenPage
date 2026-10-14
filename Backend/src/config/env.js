@@ -89,7 +89,7 @@ export const config = {
         maxImageUploadMb: num('MAX_IMAGE_UPLOAD_MB', 5),
     },
     downloadTokenSecret: str('DOWNLOAD_TOKEN_SECRET'),
-    downloadLinkTtlMinutes: num('DOWNLOAD_LINK_TTL_MINUTES', 60),
+    downloadLinkTtlMinutes: num('DOWNLOAD_LINK_TTL_MINUTES', 1440),
 
     firebase: {
         projectId: str('FIREBASE_PROJECT_ID'),

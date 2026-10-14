@@ -88,9 +88,9 @@ export const SETTINGS_DEFAULTS = {
         pendingOrderReuseMinutes: 30,
     },
     downloads: {
-        maxUsesPerLink: 5,
-        maxDownloadsPerEntitlementPerDay: 20,
-        libraryLinkTtlMinutes: 15,
+        maxUsesPerLink: 20,
+        maxDownloadsPerEntitlementPerDay: 50,
+        libraryLinkTtlMinutes: 1440,
     },
     notifications: {
         enabled: false,

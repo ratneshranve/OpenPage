@@ -39,7 +39,14 @@ const main = async () => {
     };
     await Setting.updateOne({ key: 'contact' }, { $set: contactUpdate }, { upsert: true });
 
-    console.log('All legal policies and support settings successfully updated in MongoDB!');
+    const downloadUpdate = {
+        'value.libraryLinkTtlMinutes': 1440,
+        'value.maxUsesPerLink': 20,
+        'value.maxDownloadsPerEntitlementPerDay': 50
+    };
+    await Setting.updateOne({ key: 'downloads' }, { $set: downloadUpdate }, { upsert: true });
+
+    console.log('All legal policies, support settings, and 24h download TTL successfully updated in MongoDB!');
     await disconnectDB();
 };
 
