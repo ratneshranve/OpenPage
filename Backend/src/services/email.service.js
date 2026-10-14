@@ -24,8 +24,10 @@ const getTransport = () => {
         port: config.smtp.port,
         secure: config.smtp.secure,
         auth: config.smtp.user ? { user: config.smtp.user, pass: config.smtp.pass } : undefined,
-        pool: true,
-        maxConnections: 3,
+        pool: false,
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
     });
     return transporter;
 };

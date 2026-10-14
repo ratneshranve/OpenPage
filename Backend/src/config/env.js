@@ -61,7 +61,7 @@ export const config = {
     smtp: {
         host: str('SMTP_HOST'),
         port: num('SMTP_PORT', 587),
-        secure: bool('SMTP_SECURE', false),
+        secure: process.env.SMTP_SECURE !== undefined ? bool('SMTP_SECURE') : num('SMTP_PORT', 587) === 465,
         user: str('SMTP_USER'),
         pass: str('SMTP_PASS'),
         fromName: str('SMTP_FROM_NAME', 'OpenPage'),
