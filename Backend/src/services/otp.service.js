@@ -11,6 +11,7 @@ const { otp } = config;
 
 // The code is bound to the checkout session and email: a code for one cannot verify the other.
 const hashCode = (sessionId, email, code) => hmac(otp.secret, `${sessionId}:${email}:${code}`);
+const hashLoginCode = (email, code) => hmac(otp.secret, `login:${email}:${code}`);
 
 export const sendCheckoutOtp = async (session, rawEmail, ip) => {
     const email = normalizeEmail(rawEmail);
@@ -107,3 +108,88 @@ export const verifyCheckoutOtp = async (session, rawEmail, code) => {
     );
     return { email, verifiedUntil: addMinutes(now, verificationValidMinutes) };
 };
+
+export const sendLoginOtp = async (rawEmail, ip) => {
+    const email = normalizeEmail(rawEmail);
+    const hourAgo = new Date(Date.now() - 3600 * 1000);
+
+    const [sentToEmail, sentFromIp, latest] = await Promise.all([
+        Otp.countDocuments({ email, purpose: 'login', createdAt: { $gte: hourAgo } }),
+        Otp.countDocuments({ ip, purpose: 'login', createdAt: { $gte: hourAgo } }),
+        Otp.findOne({ email, purpose: 'login' }).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    if (latest && latest.status === 'pending') {
+        const elapsed = (Date.now() - new Date(latest.createdAt).getTime()) / 1000;
+        if (elapsed < otp.resendCooldownSeconds) {
+            const retryAfter = Math.ceil(otp.resendCooldownSeconds - elapsed);
+            throw ApiError.tooMany(`Please wait ${retryAfter} seconds before requesting a new code.`, { retryAfter });
+        }
+    }
+    if (sentToEmail >= otp.maxSendsPerHour) throw ApiError.tooMany('Too many codes have been requested for this email. Please try again in an hour.');
+    if (sentFromIp >= otp.maxSendsPerHour * 4) throw ApiError.tooMany('Too many verification requests from this network. Please try again later.');
+
+    await Otp.updateMany({ email, purpose: 'login', status: 'pending' }, { $set: { status: 'superseded' } });
+
+    const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+    const record = await Otp.create({
+        email,
+        purpose: 'login',
+        codeHash: hashLoginCode(email, code),
+        expiresAt: new Date(Date.now() + otp.ttlSeconds * 1000),
+        ip,
+    });
+
+    const result = await sendNow({
+        to: email,
+        templateKey: 'otp_verification',
+        type: 'otp_verification',
+        data: { code, expiresInMinutes: Math.round(otp.ttlSeconds / 60) },
+        logData: { otpId: String(record._id), purpose: 'login' },
+    });
+
+    if (!isSmtpConfigured() && !config.isProduction) {
+        console.log(`\n[DEV ONLY] Login verification code for ${email}: ${code}\n`);
+    }
+
+    if (!result.ok) {
+        await Otp.updateOne({ _id: record._id }, { $set: { status: 'superseded' } });
+        logger.error(`Login OTP email could not be sent to ${email}`);
+        throw ApiError.unavailable('We could not send the verification email right now. Please check the address and try again shortly.');
+    }
+
+    return { cooldownSeconds: otp.resendCooldownSeconds, expiresInSeconds: otp.ttlSeconds };
+};
+
+export const verifyLoginOtp = async (rawEmail, code) => {
+    const email = normalizeEmail(rawEmail);
+    const record = await Otp.findOne({ email, purpose: 'login', status: 'pending' }).sort({ createdAt: -1 });
+    if (!record) throw ApiError.badRequest('This verification code has expired or was replaced. Please request a new code.');
+    if (record.expiresAt < new Date()) {
+        record.status = 'expired';
+        await record.save();
+        throw new ApiError(400, 'This verification code has expired. Please request a new code.', null, 'OTP_EXPIRED');
+    }
+
+    const counted = await Otp.findOneAndUpdate(
+        { _id: record._id, status: 'pending', attempts: { $lt: otp.maxAttempts } },
+        { $inc: { attempts: 1 } },
+        { new: true }
+    );
+    if (!counted) {
+        await Otp.updateOne({ _id: record._id }, { $set: { status: 'locked' } });
+        throw new ApiError(429, 'Too many incorrect attempts. Please request a new code.', null, 'OTP_LOCKED');
+    }
+
+    if (!safeEqual(hashLoginCode(email, String(code)), counted.codeHash)) {
+        const left = otp.maxAttempts - counted.attempts;
+        if (left <= 0) await Otp.updateOne({ _id: record._id }, { $set: { status: 'locked' } });
+        throw new ApiError(400, left > 0 ? `Incorrect code. ${left} attempt${left === 1 ? '' : 's'} remaining.` : 'Too many incorrect attempts. Please request a new code.', { attemptsLeft: left }, 'OTP_INVALID');
+    }
+
+    const used = await Otp.findOneAndUpdate({ _id: record._id, status: 'pending' }, { $set: { status: 'used', usedAt: new Date() } });
+    if (!used) throw ApiError.badRequest('This verification code has already been used. Please request a new code.');
+
+    return { email, verified: true };
+};
+

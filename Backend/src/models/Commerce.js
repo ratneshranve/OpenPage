@@ -18,6 +18,8 @@ const checkoutSessionSchema = new mongoose.Schema(
         items: [{ product: { type: ObjectId, ref: 'Product', required: true }, _id: false }],
         couponCode: String,
         email: { type: String, lowercase: true, trim: true, index: true },
+        customerName: { type: String, trim: true, maxlength: 120 },
+        customerPhone: { type: String, trim: true, maxlength: 20 },
         emailVerifiedAt: Date,
         verificationExpiresAt: Date,
         otp: { type: ObjectId, ref: 'Otp' },
@@ -44,7 +46,8 @@ checkoutSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 const otpSchema = new mongoose.Schema(
     {
         email: { type: String, required: true, lowercase: true, index: true },
-        checkoutSession: { type: ObjectId, ref: 'CheckoutSession', required: true, index: true },
+        checkoutSession: { type: ObjectId, ref: 'CheckoutSession', index: true },
+        purpose: { type: String, enum: ['checkout', 'login'], default: 'checkout', index: true },
         codeHash: { type: String, required: true },
         expiresAt: { type: Date, required: true },
         attempts: { type: Number, default: 0 },
@@ -79,6 +82,8 @@ const orderSchema = new mongoose.Schema(
         orderNumber: { type: String, required: true, unique: true },
         user: { type: ObjectId, ref: 'User', index: true },
         email: { type: String, required: true, lowercase: true, index: true },
+        customerName: { type: String, trim: true, maxlength: 120 },
+        customerPhone: { type: String, trim: true, maxlength: 20 },
         checkoutSession: { type: ObjectId, ref: 'CheckoutSession', index: true },
         items: [orderItemSchema],
         currency: { type: String, default: 'INR' },

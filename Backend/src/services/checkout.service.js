@@ -22,6 +22,8 @@ const isVerified = (session) => Boolean(session.email && session.emailVerifiedAt
 
 const sessionView = async (session, quote) => ({
     email: session.email || null,
+    customerName: session.customerName || null,
+    customerPhone: session.customerPhone || null,
     emailVerified: isVerified(session),
     verifiedUntil: isVerified(session) ? session.verificationExpiresAt : null,
     status: session.status,
@@ -47,6 +49,8 @@ export const createSession = async ({ productIds, couponCode, attribution, user,
         tokenHash: sha256(token),
         items: ids.map((product) => ({ product })),
         couponCode: couponCode ? String(couponCode).trim().toUpperCase() : undefined,
+        customerName: user?.name || undefined,
+        customerPhone: user?.phoneNumber || undefined,
         user: user?._id,
         attribution: sanitizeAttribution(attribution),
         ip,
@@ -55,12 +59,14 @@ export const createSession = async ({ productIds, couponCode, attribution, user,
     return { sessionToken: token, ...(await sessionView(session)) };
 };
 
-export const updateSession = async (session, { productIds, couponCode }) => {
+export const updateSession = async (session, { productIds, couponCode, customerName, customerPhone }) => {
     if (productIds) {
         const ids = [...new Set(productIds)].filter((id) => mongoose.isValidObjectId(id)).slice(0, MAX_ITEMS);
         session.items = ids.map((product) => ({ product }));
     }
     if (couponCode !== undefined) session.couponCode = couponCode ? String(couponCode).trim().toUpperCase() : undefined;
+    if (customerName !== undefined) session.customerName = customerName ? String(customerName).trim().slice(0, 120) : undefined;
+    if (customerPhone !== undefined) session.customerPhone = customerPhone ? String(customerPhone).trim().slice(0, 20) : undefined;
     session.lastActivityAt = new Date();
     await session.save();
     return sessionView(session);
@@ -145,9 +151,18 @@ const paymentPayload = async (order, paymentsSettings) => {
  * Creates (or safely reuses) the internal order and handles Manual UPI or Razorpay gateway flow.
  * Preserves Razorpay configuration while allowing seamless manual UPI payments.
  */
-export const createOrder = async (session, { termsAccepted, marketingConsent, paymentMethod }, { user, ip }) => {
+export const createOrder = async (session, { termsAccepted, marketingConsent, paymentMethod, customerName, customerPhone }, { user, ip }) => {
     if (!isVerified(session)) throw new ApiError(403, 'Please verify your email address before continuing to payment.', null, 'EMAIL_NOT_VERIFIED');
     if (!termsAccepted) throw ApiError.badRequest('Please accept the Terms and Conditions to continue.');
+
+    const nameToUse = customerName ? String(customerName).trim().slice(0, 120) : (session.customerName || user?.name || undefined);
+    const phoneToUse = customerPhone ? String(customerPhone).trim().slice(0, 20) : (session.customerPhone || user?.phoneNumber || undefined);
+
+    if (customerName !== undefined || customerPhone !== undefined) {
+        if (customerName !== undefined) session.customerName = nameToUse;
+        if (customerPhone !== undefined) session.customerPhone = phoneToUse;
+        await session.save();
+    }
 
     const quote = await quoteForSession(session);
     if (quote.invalidItems.length) {
@@ -196,6 +211,11 @@ export const createOrder = async (session, { termsAccepted, marketingConsent, pa
             sameItems(existing, quote) &&
             Date.now() - existing.createdAt.getTime() < checkoutSettings.pendingOrderReuseMinutes * 60000;
         if (reusable) {
+            if (nameToUse || phoneToUse) {
+                await Order.updateOne({ _id: existing._id }, { $set: { customerName: nameToUse, customerPhone: phoneToUse } });
+                existing.customerName = nameToUse;
+                existing.customerPhone = phoneToUse;
+            }
             if (existing.paymentMethod === 'manual_upi') {
                 if (existing.status === 'failed') await Order.updateOne({ _id: existing._id }, { $set: { status: 'pending', paymentStatus: 'pending' } });
                 return upiPayload(existing, paymentsSettings);
@@ -219,6 +239,8 @@ export const createOrder = async (session, { termsAccepted, marketingConsent, pa
         orderNumber: await newOrderNumber(),
         user: owner?._id,
         email: normalizeEmail(session.email),
+        customerName: nameToUse,
+        customerPhone: phoneToUse,
         checkoutSession: session._id,
         items: quote.items.map(({ offerName, ...item }) => item),
         currency: quote.currency,
@@ -323,6 +345,8 @@ export const getOrderStatus = async (orderNumber, { sessionToken, user }) => {
         paymentMethod: order.paymentMethod || 'manual_upi',
         deliveryStatus: order.deliveryStatus,
         email: order.email,
+        customerName: order.customerName || null,
+        customerPhone: order.customerPhone || null,
         items: order.items.map((i) => ({ productId: i.product, title: i.title, slug: i.slug, coverImage: i.coverImage, total: i.total, unitPrice: i.unitPrice, discount: i.discount })),
         subtotal: order.subtotal,
         discountTotal: order.discountTotal,

@@ -17,6 +17,16 @@ export const login = asyncHandler(async (req, res) => {
     ok(res, { user: user.toSafeJSON() }, 'Signed in');
 });
 
+export const sendOtp = asyncHandler(async (req, res) => {
+    const result = await auth.sendLoginOtp(req.body.email, req);
+    ok(res, result, 'Verification code sent to your email.');
+});
+
+export const loginWithOtp = asyncHandler(async (req, res) => {
+    const user = await auth.loginWithOtp(req.body, req, res);
+    ok(res, { user: user.toSafeJSON() }, 'Signed in successfully.');
+});
+
 export const adminLogin = asyncHandler(async (req, res) => {
     try {
         const user = await auth.login(req.body, req, res, { adminOnly: true });

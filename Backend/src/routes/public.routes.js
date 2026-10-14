@@ -32,12 +32,12 @@ router.get('/pages/:slug', catalog.getPage);
 // ---- Checkout ----
 router.post('/checkout/sessions', checkoutLimiter, optionalAuth, validate(z.object({ productIds: z.array(objectId).min(1).max(25), couponCode: coupon, attribution })), checkout.createSession);
 router.get('/checkout/sessions/current', checkout.getSession);
-router.patch('/checkout/sessions/current', checkoutLimiter, validate(z.object({ productIds: z.array(objectId).max(25).optional(), couponCode: coupon })), checkout.updateSession);
+router.patch('/checkout/sessions/current', checkoutLimiter, validate(z.object({ productIds: z.array(objectId).max(25).optional(), couponCode: coupon, customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable() })), checkout.updateSession);
 router.post('/checkout/sessions/resume', checkoutLimiter, validate(z.object({ sid: objectId, sig: z.string().max(64) })), checkout.resumeSession);
 router.post('/checkout/otp/send', otpLimiter, validate(z.object({ email })), checkout.sendOtp);
 router.post('/checkout/otp/verify', otpLimiter, validate(z.object({ email, code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code') })), checkout.verifyOtp);
 router.post('/checkout/validate-coupon', checkoutLimiter, validate(z.object({ productIds: z.array(objectId).max(25).optional(), couponCode: coupon })), checkout.validateCoupon);
-router.post('/checkout/create-order', checkoutLimiter, optionalAuth, validate(z.object({ termsAccepted: z.literal(true, { errorMap: () => ({ message: 'Please accept the Terms and Conditions' }) }), marketingConsent: z.boolean().optional().default(false), paymentMethod: z.enum(['razorpay', 'manual_upi']).optional() })), checkout.createOrder);
+router.post('/checkout/create-order', checkoutLimiter, optionalAuth, validate(z.object({ termsAccepted: z.literal(true, { errorMap: () => ({ message: 'Please accept the Terms and Conditions' }) }), marketingConsent: z.boolean().optional().default(false), paymentMethod: z.enum(['razorpay', 'manual_upi']).optional(), customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable() })), checkout.createOrder);
 router.get('/checkout/order-status/:orderId', optionalAuth, checkout.orderStatus);
 router.post('/checkout/order-status/:orderId/submit-utr', checkoutLimiter, optionalAuth, validate(z.object({ utr: z.string().trim().min(4, 'Enter a valid reference / UTR number').max(64) })), checkout.submitUtr);
 router.post('/checkout/order-status/:orderId/tracked', optionalAuth, checkout.conversionTracked);
@@ -50,6 +50,8 @@ router.post('/payments/failed', checkoutLimiter, validate(z.object({ razorpay_or
 // ---- Auth ----
 router.get('/auth/csrf', auth.csrf);
 router.get('/auth/me', optionalAuth, auth.me);
+router.post('/auth/otp/send', otpLimiter, validate(z.object({ email })), auth.sendOtp);
+router.post('/auth/otp/verify', otpLimiter, validate(z.object({ email, code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code') })), auth.loginWithOtp);
 router.post('/auth/register', authLimiter, validate(z.object({ name: z.string().trim().min(1, 'Enter your name').max(120), email, password, marketingEmails: z.boolean().optional().default(false) })), auth.register);
 router.post('/auth/login', authLimiter, validate(z.object({ email, password: z.string().min(1).max(128) })), auth.login);
 router.post('/auth/admin/login', authLimiter, validate(z.object({ email, password: z.string().min(1).max(128) })), auth.adminLogin);

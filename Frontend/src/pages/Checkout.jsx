@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
 import { api, errorCode, errorDetails, errorMessage } from '../lib/api';
 import { getAttribution } from '../lib/attribution';
-import { getSessionToken, loadRazorpay, rememberOrderToken, setSessionToken } from '../lib/checkout';
+import { getSessionToken, loadRazorpay, rememberOrderToken, setSessionToken, savePendingOrder, clearPendingOrder } from '../lib/checkout';
 import { trackInitiateCheckout } from '../lib/tracking';
 
 const EMAIL_RX = /^\S+@\S+\.\S+$/;
@@ -26,6 +26,8 @@ export default function Checkout() {
     const [loading, setLoading] = useState(true);
     const [pageError, setPageError] = useState('');
     const [email, setEmail] = useState('');
+    const [customerName, setCustomerName] = useState('');
+    const [customerPhone, setCustomerPhone] = useState('');
     const [emailError, setEmailError] = useState('');
     const [codeSent, setCodeSent] = useState(false);
     const [code, setCode] = useState('');
@@ -58,6 +60,8 @@ export default function Checkout() {
                 userPrefilled.current = true;
                 setEmail(s.email);
             }
+            if (s.customerName) setCustomerName((prev) => prev || s.customerName);
+            if (s.customerPhone) setCustomerPhone((prev) => prev || s.customerPhone);
             if (!tracked.current && s.quote?.items?.length) {
                 tracked.current = true;
                 trackInitiateCheckout(s.quote);
@@ -107,7 +111,9 @@ export default function Checkout() {
             userPrefilled.current = true;
             setEmail(user.email);
         }
-    }, [user?.email]);
+        if (user?.name) setCustomerName((prev) => prev || user.name);
+        if (user?.phoneNumber) setCustomerPhone((prev) => prev || user.phoneNumber);
+    }, [user?.email, user?.name, user?.phoneNumber]);
 
     useEffect(() => {
         if (cooldown <= 0) return undefined;
@@ -200,6 +206,7 @@ export default function Checkout() {
 
     const finish = (orderNumber) => {
         rememberOrderToken(orderNumber, getSessionToken());
+        clearPendingOrder(orderNumber);
         clear();
         navigate(`/order/${orderNumber}`, { replace: true });
     };
@@ -223,7 +230,13 @@ export default function Checkout() {
             if (activeMethod === 'razorpay') {
                 await loadRazorpay();
             }
-            order = (await api.post('/checkout/create-order', { termsAccepted: true, marketingConsent: marketing, paymentMethod: activeMethod })).data.data;
+            order = (await api.post('/checkout/create-order', {
+                termsAccepted: true,
+                marketingConsent: marketing,
+                paymentMethod: activeMethod,
+                customerName: customerName.trim() || undefined,
+                customerPhone: customerPhone.trim() || undefined,
+            })).data.data;
         } catch (err) {
             const c = errorCode(err);
             const d = errorDetails(err);
@@ -245,6 +258,7 @@ export default function Checkout() {
         }
 
         rememberOrderToken(order.orderNumber, getSessionToken());
+        savePendingOrder(order);
 
         if (order.paymentMethod === 'manual_upi') {
             setBusy('');
@@ -379,6 +393,29 @@ export default function Checkout() {
                                     )}
                                 </div>
                             )}
+
+                            <div className="mt-5 pt-4 border-t border-line/70">
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <Input
+                                        label="Full name (optional)"
+                                        placeholder="e.g. Alex Johnson"
+                                        autoComplete="name"
+                                        value={customerName}
+                                        onChange={(e) => setCustomerName(e.target.value)}
+                                        hint="For receipts and personalization"
+                                    />
+                                    <Input
+                                        label="Phone number (optional)"
+                                        type="tel"
+                                        placeholder="e.g. +91 98765 43210"
+                                        autoComplete="tel"
+                                        inputMode="tel"
+                                        value={customerPhone}
+                                        onChange={(e) => setCustomerPhone(e.target.value)}
+                                        hint="For delivery updates"
+                                    />
+                                </div>
+                            </div>
                         </section>
 
                         {/* Step 2: confirm and pay */}

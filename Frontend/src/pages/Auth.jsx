@@ -1,34 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import toast from 'react-hot-toast';
-import { CheckCircle2, MailCheck } from 'lucide-react';
+import { CheckCircle2, Mail, KeyRound, ArrowRight, RefreshCw, ShieldCheck } from 'lucide-react';
 import Seo from '../components/layout/Seo';
-import { Alert, Button, Checkbox, Input, PageLoader } from '../components/ui';
+import { Alert, Button, Input, PageLoader } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { post, errorMessage } from '../lib/api';
 
-const email = z.string().trim().min(1, 'Enter your email address').email('Enter a valid email address');
-const password = z.string().min(10, 'Use at least 10 characters').regex(/[A-Za-z]/, 'Include at least one letter').regex(/[0-9]/, 'Include at least one number');
+const EMAIL_RX = /^\S+@\S+\.\S+$/;
 
-const schemas = {
-    login: z.object({ email, password: z.string().min(1, 'Enter your password') }),
-    register: z.object({ name: z.string().trim().min(1, 'Enter your name').max(120), email, password, marketingEmails: z.boolean().optional() }),
-    forgot: z.object({ email }),
-    reset: z.object({ password, confirm: z.string() }).refine((v) => v.password === v.confirm, { path: ['confirm'], message: 'Passwords do not match' }),
-};
-
-const TITLES = { login: 'Sign in', register: 'Create your account', forgot: 'Reset your password', reset: 'Choose a new password', verify: 'Verify your email' };
-
-function Shell({ mode, children, footer }) {
+function Shell({ children, footer }) {
     return (
         <div className="container-page flex justify-center py-12 sm:py-16">
-            <Seo title={TITLES[mode]} noindex />
+            <Seo title="Sign in" noindex />
             <div className="w-full max-w-md">
-                <h1 className="text-center text-2xl font-bold">{TITLES[mode]}</h1>
-                <div className="card mt-6 p-6 sm:p-8">{children}</div>
+                <div className="text-center">
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-brand/10 text-brand mb-3">
+                        <KeyRound className="h-6 w-6" />
+                    </div>
+                    <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">Sign in with Email</h1>
+                    <p className="mt-2 text-sm text-muted">
+                        No password needed. We will send a secure 6-digit code to your email.
+                    </p>
+                </div>
+                <div className="card mt-6 p-6 sm:p-8 shadow-sm">{children}</div>
                 {footer && <div className="mt-5 text-center text-sm text-muted">{footer}</div>}
             </div>
         </div>
@@ -40,6 +35,7 @@ function VerifyEmail() {
     const { refresh } = useAuth();
     const [state, setState] = useState({ loading: true });
     const ran = useRef(false);
+
     useEffect(() => {
         if (ran.current) return;
         ran.current = true;
@@ -50,126 +46,205 @@ function VerifyEmail() {
             })
             .catch((err) => setState({ error: errorMessage(err) }));
     }, [params, refresh]);
+
     return (
-        <Shell mode="verify">
-            {state.loading && <PageLoader label="Verifying…" />}
-            {state.ok && (
-                <div className="text-center">
-                    <CheckCircle2 className="mx-auto h-12 w-12 text-brand" />
-                    <p className="mt-3 font-semibold">{state.message}</p>
-                    <p className="mt-1 text-sm text-muted">Purchases made with this email now appear in your library.</p>
-                    <Button as={Link} to="/account/library" className="mt-5">Open my library</Button>
+        <div className="container-page flex justify-center py-12 sm:py-16">
+            <Seo title="Verify your email" noindex />
+            <div className="w-full max-w-md">
+                <div className="card p-6 sm:p-8">
+                    {state.loading && <PageLoader label="Verifying…" />}
+                    {state.ok && (
+                        <div className="text-center">
+                            <CheckCircle2 className="mx-auto h-12 w-12 text-brand" />
+                            <p className="mt-3 font-semibold">{state.message}</p>
+                            <p className="mt-1 text-sm text-muted">Purchases made with this email now appear in your library.</p>
+                            <Button as={Link} to="/account/library" className="mt-5">Open my library</Button>
+                        </div>
+                    )}
+                    {state.error && (
+                        <Alert tone="error" title="Verification failed" action={<Button as={Link} to="/account" size="sm" variant="outline">Go to account</Button>}>
+                            {state.error}
+                        </Alert>
+                    )}
                 </div>
-            )}
-            {state.error && <Alert tone="error" title="Verification failed" action={<Button as={Link} to="/account" size="sm" variant="outline">Go to account</Button>}>{state.error}</Alert>}
-        </Shell>
+            </div>
+        </div>
     );
 }
 
 export default function Auth({ mode }) {
+    const navigate = useNavigate();
+
+    // Redirect any register/forgot/reset links directly to unified login
+    useEffect(() => {
+        if (mode === 'register' || mode === 'forgot' || mode === 'reset') {
+            navigate('/login', { replace: true });
+        }
+    }, [mode, navigate]);
+
     if (mode === 'verify') return <VerifyEmail />;
-    return <AuthForm key={mode} mode={mode} />;
+    return <OtpLoginForm />;
 }
 
-function AuthForm({ mode }) {
-    const { login, register: signUp, user } = useAuth();
+function OtpLoginForm() {
+    const { sendLoginOtp, loginWithOtp, user } = useAuth();
     const navigate = useNavigate();
     const [params] = useSearchParams();
+    const [email, setEmail] = useState(() => params.get('email') || '');
+    const [code, setCode] = useState('');
+    const [codeSent, setCodeSent] = useState(false);
+    const [cooldown, setCooldown] = useState(0);
+    const [submitting, setSubmitting] = useState(false);
     const [serverError, setServerError] = useState('');
-    const [done, setDone] = useState('');
+    const codeRef = useRef(null);
+
     const next = params.get('next');
     const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/account';
 
-    const {
-        register,
-        handleSubmit,
-        formState: { errors, isSubmitting },
-    } = useForm({ resolver: zodResolver(schemas[mode]), defaultValues: { email: params.get('email') || '', marketingEmails: false } });
+    useEffect(() => {
+        if (user) {
+            navigate(user.role === 'admin' && !next ? '/admin' : safeNext, { replace: true });
+        }
+    }, [user, navigate, next, safeNext]);
 
     useEffect(() => {
-        if (user && (mode === 'login' || mode === 'register')) navigate(user.role === 'admin' && !next ? '/admin' : safeNext, { replace: true });
-    }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (cooldown <= 0) return undefined;
+        const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [cooldown]);
 
-    const onSubmit = async (values) => {
+    const handleSendOtp = async (e) => {
+        e?.preventDefault();
         setServerError('');
+        const trimmed = email.trim();
+        if (!trimmed) return setServerError('Enter your email address.');
+        if (!EMAIL_RX.test(trimmed)) return setServerError('Enter a valid email address.');
+
+        setSubmitting(true);
         try {
-            if (mode === 'login') {
-                await login(values.email, values.password);
-                toast.success('Signed in.');
-            } else if (mode === 'register') {
-                const r = await signUp({ name: values.name, email: values.email, password: values.password, marketingEmails: Boolean(values.marketingEmails) });
-                toast.success(r.message);
-            } else if (mode === 'forgot') {
-                const r = await post('/auth/forgot-password', { email: values.email });
-                setDone(r.message);
-            } else if (mode === 'reset') {
-                const r = await post('/auth/reset-password', { token: params.get('token'), password: values.password });
-                toast.success(r.message);
-                navigate('/login', { replace: true });
-            }
+            const res = await sendLoginOtp(trimmed);
+            setCodeSent(true);
+            setCooldown(res?.data?.cooldownSeconds || 60);
+            toast.success('6-digit code sent to your email.');
+            setTimeout(() => codeRef.current?.focus(), 100);
         } catch (err) {
             setServerError(errorMessage(err));
+        } finally {
+            setSubmitting(false);
         }
     };
 
-    if (done) {
-        return (
-            <Shell mode={mode}>
-                <div className="text-center">
-                    <MailCheck className="mx-auto h-12 w-12 text-accent" />
-                    <p className="mt-3 text-sm text-ink-soft">{done}</p>
-                    <Button as={Link} to="/login" variant="outline" className="mt-5">Back to sign in</Button>
-                </div>
-            </Shell>
-        );
-    }
+    const handleVerifyOtp = async (e) => {
+        e?.preventDefault();
+        setServerError('');
+        const trimmedCode = code.trim();
+        if (!/^\d{6}$/.test(trimmedCode)) {
+            return setServerError('Please enter the 6-digit code received on your email.');
+        }
+
+        setSubmitting(true);
+        try {
+            await loginWithOtp(email.trim(), trimmedCode);
+            toast.success('Signed in successfully.');
+        } catch (err) {
+            setServerError(errorMessage(err));
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <Shell
-            mode={mode}
             footer={
-                mode === 'login' ? (
-                    <>New to OpenPage? <Link to={`/register${next ? `?next=${encodeURIComponent(next)}` : ''}`}>Create an account</Link></>
-                ) : mode === 'register' ? (
-                    <>Already have an account? <Link to="/login">Sign in</Link></>
-                ) : (
-                    <Link to="/login">Back to sign in</Link>
-                )
+                <div className="flex items-center justify-center gap-1.5 text-xs text-muted">
+                    <ShieldCheck className="h-4 w-4 text-brand" />
+                    <span>Secure passwordless sign in. Accounts are created automatically on first login.</span>
+                </div>
             }
         >
-            {mode === 'register' && <p className="mb-5 text-sm text-muted">An account is optional for buying. It gives you a personal library of all your purchases.</p>}
-            {mode === 'forgot' && <p className="mb-5 text-sm text-muted">Enter your account email and we will send you a link to reset your password.</p>}
             {serverError && <Alert tone="error" className="mb-5">{serverError}</Alert>}
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-                {mode === 'register' && <Input label="Name" autoComplete="name" {...register('name')} error={errors.name?.message} required />}
-                {mode !== 'reset' && <Input label="Email" type="email" autoComplete="email" {...register('email')} error={errors.email?.message} required />}
-                {(mode === 'login' || mode === 'register' || mode === 'reset') && (
+
+            {!codeSent ? (
+                <form onSubmit={handleSendOtp} className="space-y-4" noValidate>
                     <Input
-                        label={mode === 'reset' ? 'New password' : 'Password'}
-                        type="password"
-                        autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                        hint={mode !== 'login' ? 'At least 10 characters, with a letter and a number.' : undefined}
-                        {...register('password')}
-                        error={errors.password?.message}
+                        label="Email address"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         required
+                        hint="We will send a one-time code to this address."
                     />
-                )}
-                {mode === 'reset' && <Input label="Confirm password" type="password" autoComplete="new-password" {...register('confirm')} error={errors.confirm?.message} required />}
-                {mode === 'register' && <Checkbox {...register('marketingEmails')} label="Email me about new eBooks and genuine offers (optional)." />}
-                {mode === 'login' && (
-                    <div className="text-right">
-                        <Link to="/forgot-password" className="text-sm">Forgot password?</Link>
-                    </div>
-                )}
-                <Button type="submit" className="w-full" size="lg" loading={isSubmitting}>
-                    {{ login: 'Sign in', register: 'Create account', forgot: 'Send reset link', reset: 'Update password' }[mode]}
-                </Button>
-                {mode === 'register' && (
-                    <p className="text-center text-xs text-muted">
-                        By creating an account you agree to our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.
+
+                    <Button type="submit" className="w-full" size="lg" loading={submitting}>
+                        Continue with Email <ArrowRight className="h-4 w-4" />
+                    </Button>
+
+                    <p className="text-center text-xs text-muted pt-2">
+                        By continuing, you agree to our <Link to="/terms">Terms</Link> and <Link to="/privacy">Privacy Policy</Link>.
                     </p>
-                )}
-            </form>
+                </form>
+            ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-4" noValidate>
+                    <div className="rounded-xl border border-line bg-surface/50 p-3.5 text-sm flex items-center justify-between">
+                        <div className="truncate">
+                            <span className="text-xs text-muted block">Code sent to</span>
+                            <span className="font-semibold text-ink truncate">{email}</span>
+                        </div>
+                        <button
+                            type="button"
+                            className="text-xs font-semibold text-accent hover:underline shrink-0 ml-2"
+                            onClick={() => {
+                                setCodeSent(false);
+                                setCode('');
+                                setServerError('');
+                            }}
+                        >
+                            Change
+                        </button>
+                    </div>
+
+                    <div>
+                        <label htmlFor="otp-input" className="block text-sm font-medium text-ink mb-1">
+                            Enter 6-digit code
+                        </label>
+                        <input
+                            id="otp-input"
+                            ref={codeRef}
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            placeholder="······"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            className="input h-14 text-center font-mono text-2xl tracking-[0.5em] font-bold"
+                            autoFocus
+                        />
+                    </div>
+
+                    <Button type="submit" className="w-full" size="lg" loading={submitting} disabled={code.length !== 6}>
+                        Verify & Sign in
+                    </Button>
+
+                    <div className="pt-2 text-center text-sm">
+                        {cooldown > 0 ? (
+                            <span className="text-muted">Resend code in {cooldown}s</span>
+                        ) : (
+                            <button
+                                type="button"
+                                className="inline-flex items-center gap-1.5 font-semibold text-accent hover:underline text-sm"
+                                onClick={handleSendOtp}
+                                disabled={submitting}
+                            >
+                                <RefreshCw className="h-3.5 w-3.5" /> Resend verification code
+                            </button>
+                        )}
+                    </div>
+                </form>
+            )}
         </Shell>
     );
 }

@@ -40,6 +40,17 @@ export function AuthProvider({ children }) {
         return r.data.user;
     };
 
+    const sendLoginOtp = async (email) => {
+        const r = await post('/auth/otp/send', { email });
+        return r.data;
+    };
+
+    const loginWithOtp = async (email, code) => {
+        const r = await post('/auth/otp/verify', { email, code });
+        setUser(r.data.user);
+        return r.data.user;
+    };
+
     const register = async (payload) => {
         const r = await post('/auth/register', payload);
         setUser(r.data.user);
@@ -51,7 +62,7 @@ export function AuthProvider({ children }) {
         setUser(null);
     };
 
-    return <AuthContext.Provider value={{ user, loading, login, register, logout, refresh, setUser }}>{children}</AuthContext.Provider>;
+    return <AuthContext.Provider value={{ user, loading, login, sendLoginOtp, loginWithOtp, register, logout, refresh, setUser }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

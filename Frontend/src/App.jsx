@@ -86,9 +86,9 @@ export default function App() {
                     <Route path="checkout/resume" element={<CheckoutResume />} />
                     <Route path="order/:orderNumber" element={<OrderStatus />} />
                     <Route path="login" element={<Auth mode="login" />} />
-                    <Route path="register" element={<Auth mode="register" />} />
-                    <Route path="forgot-password" element={<Auth mode="forgot" />} />
-                    <Route path="reset-password" element={<Auth mode="reset" />} />
+                    <Route path="register" element={<Navigate to="/login" replace />} />
+                    <Route path="forgot-password" element={<Navigate to="/login" replace />} />
+                    <Route path="reset-password" element={<Navigate to="/login" replace />} />
                     <Route path="verify-email" element={<Auth mode="verify" />} />
                     <Route path="download" element={<Download />} />
                     <Route path="download/:token" element={<Download />} />

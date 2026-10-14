@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, BookOpen, Download, Lock, MailCheck, ShoppingBag, ShoppingCart, Star, Tag, Zap } from 'lucide-react';
+import { ArrowRight, BadgeCheck, BookOpen, Clock, Download, Lock, MailCheck, ShoppingBag, ShoppingCart, Star, Tag, X, Zap } from 'lucide-react';
 import Seo from '../components/layout/Seo';
 import { AdSlot, NotificationPrompt } from '../components/layout/Extras';
 import { ProductGrid } from '../components/shop/ProductCard';
@@ -10,6 +10,7 @@ import { useConfig } from '../context/ConfigContext';
 import { useCart } from '../context/CartContext';
 import { get } from '../lib/api';
 import { date, money } from '../lib/format';
+import { getPendingOrder, clearPendingOrder, fetchOrderStatus } from '../lib/checkout';
 
 const STEP_ICONS = [ShoppingBag, MailCheck, Lock, Download];
 const WHY_ICONS = [BadgeCheck, Zap, BookOpen, Lock];
@@ -42,11 +43,29 @@ export default function Home() {
     const subtotal = items.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
     const currency = items[0]?.currency || 'INR';
 
+    const [pendingOrder, setPendingOrder] = useState(null);
+
     useEffect(() => {
         get('/home')
             .then(setData)
             .catch(() => setData({ featured: [], bestsellers: [], recent: [], categories: [], banners: [], offers: [], testimonials: [] }))
             .finally(() => setLoading(false));
+
+        const saved = getPendingOrder();
+        if (saved && saved.orderNumber) {
+            fetchOrderStatus(saved.orderNumber)
+                .then((o) => {
+                    if (o && o.status === 'pending') {
+                        setPendingOrder(o);
+                    } else {
+                        clearPendingOrder(saved.orderNumber);
+                        setPendingOrder(null);
+                    }
+                })
+                .catch(() => {
+                    setPendingOrder(saved);
+                });
+        }
     }, []);
 
     const home = config?.homepage;
@@ -60,6 +79,43 @@ export default function Home() {
     return (
         <>
             <Seo title={seo?.homepage?.title || undefined} description={seo?.homepage?.description || undefined} jsonLd={faqLd} />
+
+            {/* Pending Payment Recovery Banner */}
+            {pendingOrder && (
+                <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-3 sm:px-6">
+                    <div className="container-page flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700">
+                                <Clock className="h-5 w-5 animate-pulse" />
+                            </span>
+                            <div>
+                                <p className="text-sm font-semibold text-ink">
+                                    Pending payment for Order <span className="font-mono text-brand font-bold">{pendingOrder.orderNumber}</span> ({money(pendingOrder.total, pendingOrder.currency)})
+                                </p>
+                                <p className="text-xs text-muted">
+                                    Resume directly to payment without refilling your details or re-verifying your email.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-auto sm:ml-0">
+                            <Button as={Link} to={`/order/${pendingOrder.orderNumber}`} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm">
+                                Complete Payment <ArrowRight className="h-4 w-4" />
+                            </Button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    clearPendingOrder(pendingOrder.orderNumber);
+                                    setPendingOrder(null);
+                                }}
+                                className="p-1.5 text-muted hover:text-ink rounded-lg transition"
+                                aria-label="Dismiss pending payment reminder"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Hero */}
             <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-accent-pale/60 to-white">

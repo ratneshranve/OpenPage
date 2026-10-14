@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import Seo from '../components/layout/Seo';
 import { Alert, BookCover, Button, Input, PageLoader } from '../components/ui';
 import { useConfig } from '../context/ConfigContext';
-import { fetchOrderStatus, markTracked } from '../lib/checkout';
+import { fetchOrderStatus, markTracked, clearPendingOrder } from '../lib/checkout';
 import { api, errorMessage } from '../lib/api';
 import { money, dateTime } from '../lib/format';
 import { trackPurchase } from '../lib/tracking';
@@ -45,6 +45,12 @@ export default function OrderStatus() {
     useEffect(() => {
         load();
     }, [load]);
+
+    useEffect(() => {
+        if (order && (order.status === 'paid' || order.status === 'partially_refunded')) {
+            clearPendingOrder(order.orderNumber);
+        }
+    }, [order]);
 
     // Poll while payment or delivery is still in progress.
     useEffect(() => {
@@ -274,7 +280,7 @@ export default function OrderStatus() {
                             {order.hasAccount ? (
                                 <Button as={Link} to="/account/library" size="sm"><Library className="h-4 w-4" /> Go to my library</Button>
                             ) : (
-                                <Button as={Link} to={`/register?email=${encodeURIComponent(order.email)}`} size="sm" variant="secondary">Create an account for a personal library</Button>
+                                <Button as={Link} to={`/login?email=${encodeURIComponent(order.email)}`} size="sm" variant="secondary">Sign in to view in your library</Button>
                             )}
                             <Button as={Link} to="/support" size="sm" variant="outline">Need help?</Button>
                         </div>

@@ -62,3 +62,50 @@ export const loadRazorpay = () => {
     }
     return razorpayPromise;
 };
+
+const PENDING_ORDER_KEY = 'op_pending_order';
+
+export const savePendingOrder = (order) => {
+    try {
+        if (!order || !order.orderNumber) return;
+        const data = {
+            orderNumber: order.orderNumber,
+            total: order.amount || order.total,
+            currency: order.currency || 'INR',
+            itemsCount: order.items?.length || 1,
+            paymentMethod: order.paymentMethod || 'manual_upi',
+            savedAt: Date.now(),
+        };
+        localStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(data));
+    } catch {
+        /* ignore */
+    }
+};
+
+export const getPendingOrder = () => {
+    try {
+        const raw = localStorage.getItem(PENDING_ORDER_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        // Expose if saved within the last 24 hours
+        if (Date.now() - parsed.savedAt > 24 * 3600 * 1000) {
+            localStorage.removeItem(PENDING_ORDER_KEY);
+            return null;
+        }
+        return parsed;
+    } catch {
+        return null;
+    }
+};
+
+export const clearPendingOrder = (orderNumber) => {
+    try {
+        const current = getPendingOrder();
+        if (!orderNumber || current?.orderNumber === orderNumber) {
+            localStorage.removeItem(PENDING_ORDER_KEY);
+        }
+    } catch {
+        /* ignore */
+    }
+};
+

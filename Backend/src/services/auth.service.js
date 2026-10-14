@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { addMinutes, clientIp, normalizeEmail, randomToken, sha256 } from '../utils/helpers.js';
 import { ACCESS_COOKIE, REFRESH_COOKIE, cookieBase } from '../middleware/auth.js';
 import { queueEmail } from './email.service.js';
+import { sendLoginOtp as sendOtpMail, verifyLoginOtp as verifyOtpCode } from './otp.service.js';
 
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
@@ -95,6 +96,46 @@ export const login = async ({ email, password }, req, res, { adminOnly = false }
     await issueSession(user, req, res);
     return user;
 };
+
+export const sendLoginOtp = async (email, req) => {
+    return sendOtpMail(email, clientIp(req));
+};
+
+export const loginWithOtp = async ({ email, code }, req, res) => {
+    email = normalizeEmail(email);
+    await verifyOtpCode(email, code);
+
+    let user = await User.findOne({ email });
+    if (!user) {
+        // Automatically create account for customer - no separate sign-up flow needed
+        user = await User.create({
+            email,
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+            role: 'customer',
+            status: 'active',
+            lastLoginAt: new Date(),
+            consents: [{ type: 'terms', granted: true, source: 'otp_login' }],
+        });
+    } else {
+        if (user.status !== 'active') throw ApiError.forbidden('This account has been suspended. Please contact support.');
+        if (!user.emailVerified) {
+            user.emailVerified = true;
+            user.emailVerifiedAt = new Date();
+        }
+        user.lastLoginAt = new Date();
+        user.failedLoginCount = 0;
+        user.lockedUntil = undefined;
+        await user.save();
+    }
+
+    // Attach past guest purchases made with this email to the account
+    await linkGuestPurchases(user);
+
+    await issueSession(user, req, res);
+    return user;
+};
+
 
 /** Rotates the refresh token. Re-use of an already-rotated token revokes every session for the user. */
 export const refresh = async (req, res) => {
