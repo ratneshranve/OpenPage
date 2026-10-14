@@ -59,7 +59,20 @@ export const startScheduler = () => {
     });
     every(5 * 60 * 1000, 'automations', () => runAutomations());
     every(5 * 60 * 1000, 'payment-reconcile', reconcileStalePayments);
-    logger.info('Background workers started (jobs, email queue, automations, campaigns, reconciliation)');
+    // Ping external health endpoint every 10 minutes to prevent Render free tier from idling out
+    every(10 * 60 * 1000, 'keep-alive', async () => {
+        if (!config.apiBaseUrl || config.apiBaseUrl.includes('localhost') || config.apiBaseUrl.includes('127.0.0.1')) return;
+        try {
+            const res = await fetch(`${config.apiBaseUrl}/health`, {
+                headers: { 'User-Agent': 'OpenPage-KeepAlive/1.0' },
+                signal: AbortSignal.timeout(10000),
+            });
+            if (!res.ok) logger.warn(`[keep-alive] Self-ping returned status ${res.status}`);
+        } catch (err) {
+            logger.warn(`[keep-alive] Self-ping failed: ${err.message}`);
+        }
+    });
+    logger.info('Background workers started (jobs, email queue, automations, campaigns, reconciliation, keep-alive)');
 };
 
 export const stopScheduler = () => timers.forEach(clearInterval);
