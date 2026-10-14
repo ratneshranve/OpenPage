@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, BookOpen, Download, Lock, MailCheck, ShoppingBag, Star, Tag, Zap } from 'lucide-react';
+import { ArrowRight, BadgeCheck, BookOpen, Download, Lock, MailCheck, ShoppingBag, ShoppingCart, Star, Tag, Zap } from 'lucide-react';
 import Seo from '../components/layout/Seo';
 import { AdSlot, NotificationPrompt } from '../components/layout/Extras';
 import { ProductGrid } from '../components/shop/ProductCard';
 import NewsletterForm from '../components/shop/NewsletterForm';
 import { Badge, Button } from '../components/ui';
 import { useConfig } from '../context/ConfigContext';
+import { useCart } from '../context/CartContext';
 import { get } from '../lib/api';
 import { date, money } from '../lib/format';
 
@@ -34,8 +35,12 @@ function Section({ title, subtitle, link, children, id, className = '' }) {
 
 export default function Home() {
     const { config } = useConfig();
+    const { items, count } = useCart();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+
+    const subtotal = items.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
+    const currency = items[0]?.currency || 'INR';
 
     useEffect(() => {
         get('/home')
@@ -264,6 +269,35 @@ export default function Home() {
                     </div>
                 </section>
             ) : null}
+
+            {count > 0 && (
+                <aside className="fixed bottom-4 left-4 right-4 z-40 mx-auto max-w-md transition-all duration-300" aria-label="Cart summary">
+                    <div className="flex items-center justify-between gap-4 rounded-2xl border border-line bg-ink/95 px-5 py-3.5 text-white shadow-2xl backdrop-blur-md">
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white">
+                                <ShoppingCart className="h-5 w-5" />
+                                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-[11px] font-bold text-white">
+                                    {count}
+                                </span>
+                            </div>
+                            <div>
+                                <p className="text-xs font-medium text-white/70">
+                                    {count} {count === 1 ? 'eBook' : 'eBooks'} in cart
+                                </p>
+                                <p className="text-sm font-bold text-white">
+                                    {money(subtotal, currency)}
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            to="/cart"
+                            className="flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-brand-dark no-underline"
+                        >
+                            View cart <ArrowRight className="h-4 w-4" />
+                        </Link>
+                    </div>
+                </aside>
+            )}
         </>
     );
 }

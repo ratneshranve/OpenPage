@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Menu, Search, ShoppingCart, User, X, LayoutDashboard } from 'lucide-react';
+import { Menu, Search, ShoppingCart, User, X } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useConfig } from '../../context/ConfigContext';
@@ -82,11 +82,6 @@ export default function Header() {
                 </nav>
                 <SearchBox className="ml-auto hidden w-full max-w-xs lg:block" />
                 <div className="ml-auto flex items-center gap-1 lg:ml-2">
-                    {user?.role === 'admin' && (
-                        <Link to="/admin" className="hidden items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-soft no-underline hover:bg-surface sm:flex">
-                            <LayoutDashboard className="h-4 w-4" /> Admin
-                        </Link>
-                    )}
                     <Link to={user ? '/account' : '/login'} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-soft no-underline hover:bg-surface hover:text-ink" aria-label={user ? 'My account' : 'Sign in'}>
                         <User className="h-5 w-5" />
                         <span className="hidden sm:inline">{user ? 'Account' : 'Sign in'}</span>
@@ -111,11 +106,6 @@ export default function Header() {
                                 {n.label}
                             </NavLink>
                         ))}
-                        {user?.role === 'admin' && (
-                            <NavLink to="/admin" className="rounded-lg px-3 py-3 text-base font-medium text-ink no-underline hover:bg-surface">
-                                Admin dashboard
-                            </NavLink>
-                        )}
                     </div>
                 </nav>
             )}
