@@ -68,6 +68,11 @@ export const orderStatus = asyncHandler(async (req, res) => {
     ok(res, await checkout.getOrderStatus(req.params.orderId, { sessionToken: sessionToken(req), user: req.user }));
 });
 
+export const submitUtr = asyncHandler(async (req, res) => {
+    const updated = await checkout.submitUtr(req.params.orderId, req.body.utr, { sessionToken: sessionToken(req), user: req.user });
+    ok(res, await checkout.getOrderStatus(updated.orderNumber, { sessionToken: sessionToken(req), user: req.user }), 'Payment reference (UTR) submitted successfully. We are verifying it.');
+});
+
 export const conversionTracked = asyncHandler(async (req, res) => {
     await checkout.markConversionTracked(req.params.orderId, { sessionToken: sessionToken(req), user: req.user });
     ok(res, null);

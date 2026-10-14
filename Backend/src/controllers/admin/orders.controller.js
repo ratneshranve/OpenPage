@@ -6,7 +6,7 @@ import { ApiError } from '../../utils/ApiError.js';
 import { escapeRegex, paginated, parsePagination } from '../../utils/helpers.js';
 import { audit } from '../../services/audit.service.js';
 import { queueEmail } from '../../services/email.service.js';
-import { reconcileOrder } from '../../services/fulfillment.service.js';
+import { reconcileOrder, approveManualOrder, rejectManualOrder } from '../../services/fulfillment.service.js';
 import { createRefundRequest, decideRefund, initiateRefund, applyGatewayRefund } from '../../services/refund.service.js';
 import { fetchRefund } from '../../services/razorpay.service.js';
 import { revokeTokensFor } from '../../services/download.service.js';
@@ -18,6 +18,7 @@ const orderFilter = (q) => {
     if (q.paymentStatus) filter.paymentStatus = q.paymentStatus;
     if (q.deliveryStatus) filter.deliveryStatus = q.deliveryStatus;
     if (q.refundStatus) filter.refundStatus = q.refundStatus;
+    if (q.paymentMethod) filter.paymentMethod = q.paymentMethod;
     if (q.from || q.to) {
         filter.createdAt = {};
         if (q.from) filter.createdAt.$gte = new Date(q.from);
@@ -27,7 +28,7 @@ const orderFilter = (q) => {
     if (q.q) {
         const term = String(q.q).trim().slice(0, 100);
         const rx = new RegExp(escapeRegex(term), 'i');
-        filter.$or = [{ orderNumber: term.toUpperCase() }, { email: rx }, { 'items.title': rx }, { 'razorpay.orderId': term }, { 'razorpay.paymentId': term }];
+        filter.$or = [{ orderNumber: term.toUpperCase() }, { email: rx }, { 'items.title': rx }, { 'razorpay.orderId': term }, { 'razorpay.paymentId': term }, { 'manualPayment.utr': term }];
     }
     return filter;
 };
@@ -36,7 +37,7 @@ export const listOrders = asyncHandler(async (req, res) => {
     const { page, limit, skip } = parsePagination(req.query);
     const filter = orderFilter(req.query);
     const [items, total] = await Promise.all([
-        Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).select('orderNumber email items.title total currency status paymentStatus deliveryStatus refundStatus createdAt paidAt razorpay.orderId coupon.code').lean(),
+        Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).select('orderNumber email items.title total currency status paymentStatus deliveryStatus refundStatus createdAt paidAt razorpay.orderId coupon.code paymentMethod manualPayment').lean(),
         Order.countDocuments(filter),
     ]);
     ok(res, paginated(items, total, { page, limit }));
@@ -105,6 +106,22 @@ export const reconcile = asyncHandler(async (req, res) => {
     if (updated.status !== before.status) await Order.updateOne({ _id: order._id }, { $set: { reconciledBy: req.user._id } });
     await audit(req, 'order.reconcile', { targetType: 'Order', targetId: order._id, details: { before, after: { status: updated.status, paymentStatus: updated.paymentStatus } } });
     ok(res, { status: updated.status, paymentStatus: updated.paymentStatus }, updated.status === before.status ? 'No change: the gateway state matches our records.' : `Order updated to ${updated.status} from gateway records.`);
+});
+
+export const approveManualPayment = asyncHandler(async (req, res) => {
+    const order = await Order.findById(req.params.id);
+    if (!order) throw ApiError.notFound('Order not found');
+    const updated = await approveManualOrder(order, req.user, req.body?.note);
+    await audit(req, 'order.approve_manual_payment', { targetType: 'Order', targetId: order._id, details: { utr: order.manualPayment?.utr, note: req.body?.note } });
+    ok(res, updated, 'Payment approved! eBook entitlements created and delivery email sent to the customer.');
+});
+
+export const rejectManualPayment = asyncHandler(async (req, res) => {
+    const order = await Order.findById(req.params.id);
+    if (!order) throw ApiError.notFound('Order not found');
+    const updated = await rejectManualOrder(order, req.user, req.body?.reason);
+    await audit(req, 'order.reject_manual_payment', { targetType: 'Order', targetId: order._id, details: { reason: req.body?.reason } });
+    ok(res, updated, 'Order marked as payment failed.');
 });
 
 export const setEntitlementStatus = asyncHandler(async (req, res) => {

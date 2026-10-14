@@ -139,6 +139,19 @@ export const SETTINGS_DEFAULTS = {
         address: '47, Gram Barud, Post Barud, Tehsil Harsud, District Khandwa, Madhya Pradesh - 450116, India',
         intro: 'Questions about an order, a download or a product? Send us a message and we will get back to you within 24 hours.',
     },
+    payments: {
+        activeGateway: 'manual_upi', // 'manual_upi' | 'razorpay' | 'both'
+        manualUpi: {
+            enabled: true,
+            upiId: 'ranveratnesh@okhdfcbank',
+            accountHolderName: 'Ratnesh Ranve / OpenPage',
+            qrCodeUrl: '',
+            instructions: '1. Scan the QR code using Google Pay, PhonePe, Paytm, or any UPI app.\n2. Pay the exact amount.\n3. Enter the 12-digit UPI Reference / UTR Number below.\n4. Once verified, your eBook download link will be delivered immediately.',
+        },
+        razorpay: {
+            enabled: false,
+        },
+    },
 };
 
 const SECTIONS = Object.keys(SETTINGS_DEFAULTS);

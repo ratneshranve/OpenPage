@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { CheckCircle2, Clock, Library, Mail, RefreshCw, XCircle } from 'lucide-react';
+import { Check, CheckCircle2, Clock, Copy, Library, Mail, RefreshCw, Smartphone, XCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import Seo from '../components/layout/Seo';
-import { Alert, BookCover, Button, PageLoader } from '../components/ui';
+import { Alert, BookCover, Button, Input, PageLoader } from '../components/ui';
 import { useConfig } from '../context/ConfigContext';
 import { fetchOrderStatus, markTracked } from '../lib/checkout';
-import { errorMessage } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
 import { money, dateTime } from '../lib/format';
 import { trackPurchase } from '../lib/tracking';
 import { NotificationPrompt } from '../components/layout/Extras';
 
 /**
- * Success / pending / failure page. The status shown always comes from the backend, which only
- * marks an order paid after verifying the payment with Razorpay. Landing here does not count as a purchase.
+ * Success / pending / failure page. The status shown always comes from the backend.
+ * Supports automated Razorpay payments and Direct UPI verification.
  */
 export default function OrderStatus() {
     const { orderNumber } = useParams();
@@ -20,6 +21,9 @@ export default function OrderStatus() {
     const [order, setOrder] = useState(null);
     const [error, setError] = useState('');
     const [polls, setPolls] = useState(0);
+    const [utrInput, setUtrInput] = useState('');
+    const [submittingUtr, setSubmittingUtr] = useState(false);
+    const [copied, setCopied] = useState(false);
     const timer = useRef(null);
 
     const load = useCallback(async () => {
@@ -82,7 +86,117 @@ export default function OrderStatus() {
                         <p className="mt-2 text-muted">Order <strong className="text-ink">{order.orderNumber}</strong> · {dateTime(order.paidAt)}</p>
                     </div>
                 )}
-                {pending && (
+                {pending && order.paymentMethod === 'manual_upi' && (
+                    <div className="space-y-6">
+                        {order.manualPayment?.utr ? (
+                            <div className="text-center">
+                                <Clock className="mx-auto h-14 w-14 animate-pulse text-accent" aria-hidden />
+                                <h1 className="mt-3 text-2xl font-bold">UPI Payment Verification in Progress</h1>
+                                <p className="mt-2 text-muted">
+                                    We received your payment reference: <strong className="font-mono text-ink text-base">{order.manualPayment.utr}</strong>
+                                </p>
+                                <div className="my-6 rounded-xl border border-line bg-surface/60 p-5 text-left text-sm space-y-2.5">
+                                    <p className="font-semibold text-ink">What happens next?</p>
+                                    <p className="text-muted leading-relaxed">
+                                        1. We verify your UPI transaction with our bank account. This typically takes <strong>5 to 15 minutes</strong> during business hours.
+                                    </p>
+                                    <p className="text-muted leading-relaxed">
+                                        2. Once approved, this page will instantly update to <strong>Confirmed</strong> with your eBook download button.
+                                    </p>
+                                    <p className="text-muted leading-relaxed">
+                                        3. A direct secure download link is also emailed automatically to <strong className="text-ink">{order.email}</strong>.
+                                    </p>
+                                </div>
+                                <div className="flex flex-wrap items-center justify-center gap-3">
+                                    <Button variant="outline" size="sm" onClick={load}>
+                                        <RefreshCw className="h-4 w-4" /> Check again
+                                    </Button>
+                                    <Button as="a" href={`https://wa.me/919770133148?text=Hi%20OpenPage,%20I%20have%20paid%20for%20order%20${order.orderNumber}%20with%20UTR%20${order.manualPayment.utr}`} target="_blank" rel="noopener noreferrer" variant="outline" size="sm">
+                                        WhatsApp support (+91 9770133148)
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center space-y-4">
+                                <Clock className="mx-auto h-12 w-12 text-accent" aria-hidden />
+                                <h1 className="text-2xl font-bold">Complete your UPI Payment</h1>
+                                <p className="text-sm text-muted">Scan the QR code or pay to the UPI ID below, then enter your 12-digit UTR reference number.</p>
+
+                                <div>
+                                    <img
+                                        src={order.manualUpi?.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(order.manualUpi?.upiUri || '')}`}
+                                        alt="UPI QR Code"
+                                        className="mx-auto h-48 w-48 rounded-xl border border-line bg-white p-2 shadow-sm"
+                                    />
+                                    <p className="mt-2 text-xs text-muted">Amount: <strong>{money(order.total, order.currency)}</strong></p>
+                                </div>
+
+                                <div className="max-w-md mx-auto rounded-xl border border-line bg-surface p-3 text-left text-sm space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs text-muted font-medium">UPI ID / VPA:</span>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(order.manualUpi?.upiId || '');
+                                                setCopied(true);
+                                                toast.success('UPI ID copied!');
+                                                setTimeout(() => setCopied(false), 2000);
+                                            }}
+                                        >
+                                            {copied ? <Check className="h-3.5 w-3.5 text-brand" /> : <Copy className="h-3.5 w-3.5" />}
+                                            {copied ? 'Copied' : 'Copy UPI ID'}
+                                        </Button>
+                                    </div>
+                                    <p className="font-mono text-sm font-bold text-ink">{order.manualUpi?.upiId}</p>
+                                    <p className="text-xs text-muted">Payee: <strong className="text-ink">{order.manualUpi?.payeeName}</strong></p>
+                                </div>
+
+                                {order.manualUpi?.upiUri && (
+                                    <div className="max-w-md mx-auto sm:hidden">
+                                        <a
+                                            href={order.manualUpi.upiUri}
+                                            className="flex items-center justify-center gap-2 rounded-lg bg-brand text-white py-3 px-4 font-semibold text-sm w-full shadow-sm"
+                                        >
+                                            <Smartphone className="h-4 w-4" /> Open in UPI App (GPay / PhonePe)
+                                        </a>
+                                    </div>
+                                )}
+
+                                <div className="max-w-md mx-auto border-t border-line pt-4 text-left space-y-3">
+                                    <Input
+                                        label="Enter 12-digit UPI Reference / UTR Number"
+                                        placeholder="e.g. 428901234567"
+                                        value={utrInput}
+                                        onChange={(e) => setUtrInput(e.target.value.replace(/\s+/g, ''))}
+                                        hint="Found in your Google Pay, PhonePe, or Paytm receipt after paying."
+                                    />
+                                    <Button
+                                        className="w-full"
+                                        size="lg"
+                                        loading={submittingUtr}
+                                        disabled={!utrInput.trim()}
+                                        onClick={async () => {
+                                            setSubmittingUtr(true);
+                                            try {
+                                                await api.post(`/checkout/order-status/${order.orderNumber}/submit-utr`, { utr: utrInput.trim() });
+                                                toast.success('Payment reference submitted!');
+                                                await load();
+                                            } catch (err) {
+                                                toast.error(errorMessage(err));
+                                            } finally {
+                                                setSubmittingUtr(false);
+                                            }
+                                        }}
+                                    >
+                                        Submit UTR Reference
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                {pending && order.paymentMethod !== 'manual_upi' && (
                     <div className="text-center">
                         <Clock className="mx-auto h-14 w-14 animate-pulse text-accent" aria-hidden />
                         <h1 className="mt-3 text-2xl font-bold">Payment is being confirmed</h1>

@@ -439,13 +439,92 @@ function Settings() {
     const checkout = useSection('checkout');
     const downloads = useSection('downloads');
     const features = useSection('features');
-    if (checkout.loading || downloads.loading || features.loading) return <PageLoader />;
+    const payments = useSection('payments');
+    if (checkout.loading || downloads.loading || features.loading || payments.loading) return <PageLoader />;
     const c = checkout.value;
     const dl = downloads.value;
     const f = features.value;
+    const pay = payments.value || {};
     return (
         <div className="space-y-6">
             <PageHeader title="Website settings" description="Operational settings and feature toggles. Credentials are environment variables and cannot be edited here." />
+            <Panel title="Payment Methods & Gateway" actions={<SaveButton s={payments} />}>
+                <div className="space-y-6">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <Select
+                            label="Active Payment Method on Storefront"
+                            value={pay.activeGateway || 'manual_upi'}
+                            onChange={(e) => payments.set('activeGateway', e.target.value)}
+                            options={[
+                                { value: 'manual_upi', label: 'Manual UPI (QR Code & UTR Verification) - 0% Fees' },
+                                { value: 'razorpay', label: 'Razorpay Payment Gateway (Cards, UPI, Netbanking)' },
+                                { value: 'both', label: 'Both (Customer chooses at checkout)' },
+                            ]}
+                            hint="Switch instantly between Manual UPI and Razorpay without code changes."
+                        />
+                    </div>
+
+                    <div className="rounded-xl border border-line bg-surface/50 p-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-line">
+                            <div>
+                                <h4 className="font-semibold text-sm">Direct UPI Payment (No Gateway Required)</h4>
+                                <p className="text-xs text-muted">Customer scans your UPI QR code or pays to your UPI ID, then submits the 12-digit UTR for admin approval.</p>
+                            </div>
+                            <Toggle checked={pay.manualUpi?.enabled ?? true} onChange={(x) => payments.set('manualUpi.enabled', x)} label="Enabled" />
+                        </div>
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <Input
+                                label="UPI ID / VPA"
+                                placeholder="e.g. ranveratnesh@okhdfcbank"
+                                value={pay.manualUpi?.upiId || ''}
+                                onChange={(e) => payments.set('manualUpi.upiId', e.target.value.trim())}
+                                hint="Your GPay / PhonePe / Paytm / Bank UPI ID where customers send payment."
+                            />
+                            <Input
+                                label="Payee / Account Holder Name"
+                                placeholder="e.g. OpenPage / Ratnesh Ranve"
+                                value={pay.manualUpi?.accountHolderName || ''}
+                                onChange={(e) => payments.set('manualUpi.accountHolderName', e.target.value)}
+                                hint="Displayed as receiver name on customer's UPI app."
+                            />
+                            <div className="sm:col-span-2">
+                                <Input
+                                    label="Custom QR Code Image URL (Optional)"
+                                    placeholder="https://... (leave blank to auto-generate dynamic QR code)"
+                                    value={pay.manualUpi?.qrCodeUrl || ''}
+                                    onChange={(e) => payments.set('manualUpi.qrCodeUrl', e.target.value.trim())}
+                                    hint="If blank, OpenPage automatically generates a live dynamic QR code with exact cart amount."
+                                />
+                            </div>
+                            <div className="sm:col-span-2">
+                                <Textarea
+                                    label="Customer Payment Instructions"
+                                    rows={3}
+                                    value={pay.manualUpi?.instructions || ''}
+                                    onChange={(e) => payments.set('manualUpi.instructions', e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-line bg-surface/50 p-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-line">
+                            <div>
+                                <h4 className="font-semibold text-sm">Razorpay Payment Gateway</h4>
+                                <p className="text-xs text-muted">Preserved for future use. Toggle on whenever your merchant gateway is approved and credentials are added.</p>
+                            </div>
+                            <Toggle checked={pay.razorpay?.enabled ?? false} onChange={(x) => payments.set('razorpay.enabled', x)} label="Enabled" />
+                        </div>
+                        <div className="mt-3 text-xs text-muted">
+                            {pay.razorpay?.enabled ? (
+                                <p className="text-brand font-medium">✓ Razorpay is toggled ON. Ensure RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are configured in Backend/.env.</p>
+                            ) : (
+                                <p>Razorpay is currently inactive. You can turn this on anytime when you are ready to accept automated card and gateway payments.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </Panel>
             <Panel title="Checkout" actions={<SaveButton s={checkout} />}>
                 <div className="grid gap-4 sm:grid-cols-3">
                     <Input label="Email verification valid for (minutes)" type="number" min="5" value={c.verificationValidMinutes} onChange={(e) => checkout.set('verificationValidMinutes', Number(e.target.value))} hint="After verifying, the customer can pay within this window." />

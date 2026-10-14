@@ -42,7 +42,8 @@ const upsertPayment = async (order, payment, via, signatureVerified = false) => 
 };
 
 /** Grants access and starts delivery. Idempotent: safe for duplicate callbacks and webhooks. */
-const markPaid = async (order, payment, via) => {
+export const markPaid = async (order, payment, via) => {
+    const isManual = payment?.method === 'manual_upi' || order.paymentMethod === 'manual_upi';
     const updated = await Order.findOneAndUpdate(
         { _id: order._id, status: { $in: ['pending', 'failed', 'cancelled'] } },
         {
@@ -50,8 +51,9 @@ const markPaid = async (order, payment, via) => {
                 status: 'paid',
                 paymentStatus: 'paid',
                 paidAt: new Date(),
-                'razorpay.paymentId': payment.id,
-                'razorpay.method': payment.method,
+                paymentMethod: isManual ? 'manual_upi' : 'razorpay',
+                ...(payment?.id ? { 'razorpay.paymentId': payment.id } : {}),
+                ...(payment?.method ? { 'razorpay.method': payment.method } : {}),
                 failureReason: null,
             },
         },
@@ -181,4 +183,65 @@ export const reconcileOrder = async (order, via = 'reconciliation') => {
     for (const p of failed) await upsertPayment(order, p, via);
     if (payments.length) await Order.updateOne({ _id: order._id, paymentStatus: 'created' }, { $set: { paymentStatus: 'attempted' } });
     return Order.findById(order._id);
+};
+
+/**
+ * Manually approves a pending UPI or offline order from the Admin panel.
+ * Records the admin reviewer, marks payment as captured, issues entitlements, and sends delivery email.
+ */
+export const approveManualOrder = async (order, adminUser, note) => {
+    if (!['pending', 'failed'].includes(order.status)) {
+        throw ApiError.badRequest('Only pending or failed orders can be approved.');
+    }
+    const utr = order.manualPayment?.utr || `UPI-MANUAL-${Date.now()}`;
+    await Payment.findOneAndUpdate(
+        { order: order._id },
+        {
+            $set: {
+                amount: order.total,
+                currency: order.currency,
+                status: 'captured',
+                method: 'manual_upi',
+                signatureVerified: true,
+                capturedAt: new Date(),
+                verifiedVia: ['admin_manual_approval'],
+            },
+        },
+        { upsert: true, new: true }
+    );
+
+    const updateDoc = {
+        'manualPayment.approvedAt': new Date(),
+        'manualPayment.approvedBy': adminUser._id,
+    };
+    if (note) {
+        await Order.updateOne({ _id: order._id }, { $push: { notes: { by: adminUser._id, text: `Manual payment approved: ${note}` } } });
+    }
+    await Order.updateOne({ _id: order._id }, { $set: updateDoc });
+
+    return markPaid(order, { id: utr, method: 'manual_upi' }, 'admin_manual_approval');
+};
+
+/**
+ * Rejects a manual payment when UTR is invalid or payment not received.
+ */
+export const rejectManualOrder = async (order, adminUser, reason) => {
+    if (order.status !== 'pending') {
+        throw ApiError.badRequest('Only pending orders can be rejected.');
+    }
+    const reasonText = reason || 'Manual payment could not be verified with bank records';
+    const update = {
+        $set: {
+            status: 'failed',
+            paymentStatus: 'failed',
+            failureReason: reasonText,
+            'manualPayment.rejectedAt': new Date(),
+            'manualPayment.rejectedReason': reasonText,
+        },
+    };
+    if (reason) {
+        update.$push = { notes: { by: adminUser._id, text: `Manual payment rejected: ${reason}` } };
+    }
+    const updated = await Order.findByIdAndUpdate(order._id, update, { new: true });
+    return updated;
 };

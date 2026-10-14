@@ -95,25 +95,57 @@ const sameItems = (order, quote) =>
     order.items.length === quote.items.length &&
     order.items.every((item) => quote.items.some((q) => String(q.product) === String(item.product) && q.total === item.total));
 
-const paymentPayload = async (order) => {
+const upiPayload = async (order, paymentsSettings) => {
+    const general = await getSettings('general');
+    const manualUpi = paymentsSettings?.manualUpi || {};
+    const upiId = manualUpi.upiId || 'ranveratnesh@okhdfcbank';
+    const payeeName = manualUpi.accountHolderName || general.siteName || 'OpenPage';
+    const amountInRupees = (order.total / 100).toFixed(2);
+    const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amountInRupees}&tn=${encodeURIComponent(`Order ${order.orderNumber}`)}&cu=INR`;
+    return {
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: 'manual_upi',
+        amount: order.total,
+        currency: order.currency,
+        manualUpi: {
+            upiId,
+            payeeName,
+            amountInRupees,
+            upiUri,
+            qrCodeUrl: manualUpi.qrCodeUrl || '',
+            instructions: manualUpi.instructions || '',
+            submittedUtr: order.manualPayment?.utr || '',
+        },
+        prefill: { email: order.email },
+        merchantName: general.siteName,
+    };
+};
+
+const paymentPayload = async (order, paymentsSettings) => {
+    if (order.paymentMethod === 'manual_upi') {
+        return upiPayload(order, paymentsSettings);
+    }
     const general = await getSettings('general');
     return {
         orderNumber: order.orderNumber,
         status: order.status,
+        paymentStatus: order.paymentStatus,
+        paymentMethod: 'razorpay',
         amount: order.total,
         currency: order.currency,
-        razorpay: { keyId: config.razorpay.keyId, orderId: order.razorpay.orderId, amount: order.total, currency: order.currency },
+        razorpay: { keyId: config.razorpay.keyId, orderId: order.razorpay?.orderId, amount: order.total, currency: order.currency },
         prefill: { email: order.email },
         merchantName: general.siteName,
     };
 };
 
 /**
- * Creates (or safely reuses) the internal order and the Razorpay order.
- * Never creates a second payable order while an earlier one for this checkout may still be paid.
+ * Creates (or safely reuses) the internal order and handles Manual UPI or Razorpay gateway flow.
+ * Preserves Razorpay configuration while allowing seamless manual UPI payments.
  */
-export const createOrder = async (session, { termsAccepted, marketingConsent }, { user, ip }) => {
-    if (!isRazorpayConfigured()) throw ApiError.unavailable('Online payments are not configured yet. Please contact support.');
+export const createOrder = async (session, { termsAccepted, marketingConsent, paymentMethod }, { user, ip }) => {
     if (!isVerified(session)) throw new ApiError(403, 'Please verify your email address before continuing to payment.', null, 'EMAIL_NOT_VERIFIED');
     if (!termsAccepted) throw ApiError.badRequest('Please accept the Terms and Conditions to continue.');
 
@@ -126,12 +158,24 @@ export const createOrder = async (session, { termsAccepted, marketingConsent }, 
         throw new ApiError(409, quote.coupon?.message || 'Your coupon is no longer valid.', { coupon: quote.coupon }, 'COUPON_INVALID');
     }
 
-    const checkoutSettings = await getSettings('checkout');
+    const [checkoutSettings, paymentsSettings] = await Promise.all([
+        getSettings('checkout'),
+        getSettings('payments'),
+    ]);
+
+    const activeGateway = paymentsSettings.activeGateway || 'manual_upi';
+    let chosenMethod = paymentMethod || activeGateway;
+    if (activeGateway !== 'both') {
+        chosenMethod = activeGateway;
+    }
+    if (chosenMethod === 'razorpay' && !isRazorpayConfigured()) {
+        chosenMethod = 'manual_upi';
+    }
 
     // Reconcile any earlier order from this checkout before creating a new one.
     if (session.currentOrder) {
         let existing = await Order.findById(session.currentOrder);
-        if (existing && existing.status === 'pending') {
+        if (existing && existing.status === 'pending' && existing.paymentMethod === 'razorpay') {
             try {
                 existing = await reconcileOrder(existing, 'reconciliation');
             } catch (err) {
@@ -142,7 +186,7 @@ export const createOrder = async (session, { termsAccepted, marketingConsent }, 
         if (existing && ['paid', 'partially_refunded'].includes(existing.status)) {
             throw new ApiError(409, 'This checkout has already been paid.', { orderNumber: existing.orderNumber, alreadyPaid: true }, 'ALREADY_PAID');
         }
-        if (existing && existing.status === 'pending' && existing.paymentStatus === 'pending') {
+        if (existing && existing.status === 'pending' && existing.paymentStatus === 'pending' && existing.paymentMethod === 'razorpay') {
             throw new ApiError(409, 'A payment for this checkout is still being confirmed. Please wait before paying again.', { orderNumber: existing.orderNumber, pending: true }, 'PAYMENT_PENDING');
         }
         const reusable =
@@ -152,10 +196,16 @@ export const createOrder = async (session, { termsAccepted, marketingConsent }, 
             sameItems(existing, quote) &&
             Date.now() - existing.createdAt.getTime() < checkoutSettings.pendingOrderReuseMinutes * 60000;
         if (reusable) {
-            const gatewayOrder = await fetchOrder(existing.razorpay.orderId);
-            if (gatewayOrder.status !== 'paid') {
-                if (existing.status === 'failed') await Order.updateOne({ _id: existing._id }, { $set: { status: 'pending', paymentStatus: 'attempted' } });
-                return paymentPayload(existing);
+            if (existing.paymentMethod === 'manual_upi') {
+                if (existing.status === 'failed') await Order.updateOne({ _id: existing._id }, { $set: { status: 'pending', paymentStatus: 'pending' } });
+                return upiPayload(existing, paymentsSettings);
+            }
+            if (existing.razorpay?.orderId && isRazorpayConfigured()) {
+                const gatewayOrder = await fetchOrder(existing.razorpay.orderId);
+                if (gatewayOrder.status !== 'paid') {
+                    if (existing.status === 'failed') await Order.updateOne({ _id: existing._id }, { $set: { status: 'pending', paymentStatus: 'attempted' } });
+                    return paymentPayload(existing, paymentsSettings);
+                }
             }
         }
         if (existing && ['pending', 'failed'].includes(existing.status)) {
@@ -180,6 +230,8 @@ export const createOrder = async (session, { termsAccepted, marketingConsent }, 
         offersApplied: quote.offersApplied,
         tax: quote.tax || undefined,
         total: quote.total,
+        paymentMethod: chosenMethod,
+        paymentStatus: chosenMethod === 'manual_upi' ? 'pending' : 'created',
         termsAcceptedAt: new Date(),
         termsVersion: checkoutSettings.termsVersion,
         marketingConsent: Boolean(marketingConsent),
@@ -187,21 +239,23 @@ export const createOrder = async (session, { termsAccepted, marketingConsent }, 
         ip,
     });
 
-    let gatewayOrder;
-    try {
-        gatewayOrder = await createGatewayOrder({
-            amount: order.total,
-            currency: order.currency,
-            receipt: order.orderNumber,
-            notes: { orderId: String(order._id), orderNumber: order.orderNumber },
-        });
-    } catch (err) {
-        await Order.updateOne({ _id: order._id }, { $set: { status: 'cancelled', failureReason: 'Gateway order creation failed' } });
-        throw err;
+    if (chosenMethod === 'razorpay') {
+        let gatewayOrder;
+        try {
+            gatewayOrder = await createGatewayOrder({
+                amount: order.total,
+                currency: order.currency,
+                receipt: order.orderNumber,
+                notes: { orderId: String(order._id), orderNumber: order.orderNumber },
+            });
+        } catch (err) {
+            await Order.updateOne({ _id: order._id }, { $set: { status: 'cancelled', failureReason: 'Gateway order creation failed' } });
+            throw err;
+        }
+        order.razorpay = { orderId: gatewayOrder.id };
+        await order.save();
+        await Payment.create({ order: order._id, razorpayOrderId: gatewayOrder.id, amount: order.total, currency: order.currency, status: 'created' });
     }
-    order.razorpay = { orderId: gatewayOrder.id };
-    await order.save();
-    await Payment.create({ order: order._id, razorpayOrderId: gatewayOrder.id, amount: order.total, currency: order.currency, status: 'created' });
 
     const now = new Date();
     await CheckoutSession.updateOne(
@@ -220,7 +274,7 @@ export const createOrder = async (session, { termsAccepted, marketingConsent }, 
             },
         }
     );
-    return paymentPayload(order);
+    return paymentPayload(order, paymentsSettings);
 };
 
 const lastReconcile = new Map();
@@ -254,10 +308,19 @@ export const getOrderStatus = async (orderNumber, { sessionToken, user }) => {
     }
 
     const account = user || (await User.findOne({ email: order.email, emailVerified: true }).select('_id').lean());
+    const paymentsSettings = await getSettings('payments');
+    const manualUpi = paymentsSettings?.manualUpi || {};
+    const general = await getSettings('general');
+    const amountInRupees = (order.total / 100).toFixed(2);
+    const upiId = manualUpi.upiId || 'ranveratnesh@okhdfcbank';
+    const payeeName = manualUpi.accountHolderName || general.siteName || 'OpenPage';
+    const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amountInRupees}&tn=${encodeURIComponent(`Order ${order.orderNumber}`)}&cu=INR`;
+
     return {
         orderNumber: order.orderNumber,
         status: order.status,
         paymentStatus: order.paymentStatus,
+        paymentMethod: order.paymentMethod || 'manual_upi',
         deliveryStatus: order.deliveryStatus,
         email: order.email,
         items: order.items.map((i) => ({ productId: i.product, title: i.title, slug: i.slug, coverImage: i.coverImage, total: i.total, unitPrice: i.unitPrice, discount: i.discount })),
@@ -269,9 +332,51 @@ export const getOrderStatus = async (orderNumber, { sessionToken, user }) => {
         paidAt: order.paidAt,
         failureReason: order.status === 'failed' ? order.failureReason : null,
         hasAccount: Boolean(account),
+        manualPayment: order.manualPayment ? {
+            utr: order.manualPayment.utr || null,
+            submittedAt: order.manualPayment.submittedAt || null,
+            approvedAt: order.manualPayment.approvedAt || null,
+            rejectedAt: order.manualPayment.rejectedAt || null,
+            rejectedReason: order.manualPayment.rejectedReason || null,
+        } : null,
+        manualUpi: {
+            upiId,
+            payeeName,
+            amountInRupees,
+            upiUri,
+            qrCodeUrl: manualUpi.qrCodeUrl || '',
+            instructions: manualUpi.instructions || '',
+        },
         // Purchase conversions are reported once per order, only after verified payment.
         trackPurchase: order.status === 'paid' && !order.conversionTrackedAt,
     };
+};
+
+/**
+ * Customers submit the 12-digit UTR/reference number after paying via UPI.
+ */
+export const submitUtr = async (orderNumber, utr, { sessionToken, user }) => {
+    let order = await Order.findOne({ orderNumber: String(orderNumber).toUpperCase() });
+    if (!order) throw ApiError.notFound('Order not found.');
+    let allowed = false;
+    if (sessionToken && order.checkoutSession) {
+        const session = await CheckoutSession.findOne({ tokenHash: sha256(sessionToken) }).select('_id').lean();
+        allowed = Boolean(session && String(session._id) === String(order.checkoutSession));
+    }
+    if (!allowed && user) allowed = String(order.user) === String(user._id) || (user.emailVerified && user.email === order.email) || user.role === 'admin';
+    if (!allowed) throw ApiError.notFound('Order not found.');
+
+    if (order.status === 'paid') return order;
+
+    const trimmedUtr = String(utr).trim();
+    order.manualPayment = order.manualPayment || {};
+    order.manualPayment.utr = trimmedUtr;
+    order.manualPayment.submittedAt = new Date();
+    order.paymentStatus = 'pending';
+    order.notes = order.notes || [];
+    order.notes.push({ text: `Customer submitted UPI Reference / UTR: ${trimmedUtr}`, at: new Date() });
+    await order.save();
+    return order;
 };
 
 export const markConversionTracked = async (orderNumber, { sessionToken, user }) => {

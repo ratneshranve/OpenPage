@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle2, Lock, Mail, Pencil, ShieldCheck, ShoppingCart } from 'lucide-react';
+import { Check, CheckCircle2, Copy, CreditCard, Lock, Mail, Pencil, ShieldCheck, ShoppingCart, Smartphone } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Seo from '../components/layout/Seo';
 import OrderSummary from '../components/shop/OrderSummary';
 import CouponForm from '../components/shop/CouponForm';
-import { Alert, Button, Checkbox, EmptyState, Input, PageLoader } from '../components/ui';
+import { Alert, Button, Checkbox, EmptyState, Input, Modal, PageLoader, cn } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfig } from '../context/ConfigContext';
@@ -36,6 +36,10 @@ export default function Checkout() {
     const [termsError, setTermsError] = useState('');
     const [marketing, setMarketing] = useState(false);
     const [payError, setPayError] = useState('');
+    const [selectedMethod, setSelectedMethod] = useState('');
+    const [upiOrder, setUpiOrder] = useState(null);
+    const [utr, setUtr] = useState('');
+    const [copied, setCopied] = useState(false);
     const tracked = useRef(false);
     const codeRef = useRef(null);
     const userPrefilled = useRef(false);
@@ -200,6 +204,14 @@ export default function Checkout() {
         navigate(`/order/${orderNumber}`, { replace: true });
     };
 
+    const paymentsConfig = config?.payments;
+    const activeGateway = paymentsConfig?.activeGateway || 'manual_upi';
+    const razorpayAvailable = Boolean(paymentsConfig?.razorpay?.enabled);
+    const manualUpiAvailable = Boolean(paymentsConfig?.manualUpi?.enabled ?? true);
+    const allowChoice = activeGateway === 'both' && razorpayAvailable && manualUpiAvailable;
+    const defaultMethod = activeGateway === 'razorpay' && razorpayAvailable ? 'razorpay' : 'manual_upi';
+    const activeMethod = allowChoice ? (selectedMethod || defaultMethod) : defaultMethod;
+
     const pay = async () => {
         setPayError('');
         setTermsError('');
@@ -208,8 +220,10 @@ export default function Checkout() {
         setBusy('pay');
         let order;
         try {
-            await loadRazorpay();
-            order = (await api.post('/checkout/create-order', { termsAccepted: true, marketingConsent: marketing })).data.data;
+            if (activeMethod === 'razorpay') {
+                await loadRazorpay();
+            }
+            order = (await api.post('/checkout/create-order', { termsAccepted: true, marketingConsent: marketing, paymentMethod: activeMethod })).data.data;
         } catch (err) {
             const c = errorCode(err);
             const d = errorDetails(err);
@@ -231,6 +245,13 @@ export default function Checkout() {
         }
 
         rememberOrderToken(order.orderNumber, getSessionToken());
+
+        if (order.paymentMethod === 'manual_upi') {
+            setBusy('');
+            setUpiOrder(order);
+            return;
+        }
+
         const rzp = new window.Razorpay({
             key: order.razorpay.keyId,
             order_id: order.razorpay.orderId,
@@ -264,7 +285,7 @@ export default function Checkout() {
         rzp.on('payment.failed', (resp) => {
             const reason = resp?.error?.description || 'The payment did not go through.';
             setPayError(`${reason} No order has been completed. You can try again or use a different payment method.`);
-            api.post('/payments/failed', { razorpay_order_id: resp?.error?.metadata?.order_id || order.razorpay.orderId, razorpay_payment_id: resp?.error?.metadata?.payment_id }).catch(() => {});
+            api.post('/payments/failed', { razorpay_order_id: resp?.error?.metadata?.order_id || order.razorpay?.orderId, razorpay_payment_id: resp?.error?.metadata?.payment_id }).catch(() => {});
         });
         rzp.open();
     };
@@ -367,6 +388,64 @@ export default function Checkout() {
                                 <h2 id="step-pay" className="text-lg font-semibold">Review and pay</h2>
                             </div>
                             <div className="mt-4 space-y-4">
+                                {allowChoice ? (
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-ink">Payment method</label>
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedMethod('manual_upi')}
+                                                className={cn(
+                                                    'flex items-center gap-3 rounded-xl border p-3.5 text-left transition',
+                                                    activeMethod === 'manual_upi'
+                                                        ? 'border-brand bg-brand-pale text-ink shadow-sm ring-1 ring-brand'
+                                                        : 'border-line bg-white hover:bg-surface text-ink-soft'
+                                                )}
+                                            >
+                                                <Smartphone className="h-5 w-5 text-brand shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-sm">UPI (GPay / PhonePe / Paytm)</p>
+                                                    <p className="text-xs text-muted">Scan QR or Pay to UPI ID</p>
+                                                </div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelectedMethod('razorpay')}
+                                                className={cn(
+                                                    'flex items-center gap-3 rounded-xl border p-3.5 text-left transition',
+                                                    activeMethod === 'razorpay'
+                                                        ? 'border-brand bg-brand-pale text-ink shadow-sm ring-1 ring-brand'
+                                                        : 'border-line bg-white hover:bg-surface text-ink-soft'
+                                                )}
+                                            >
+                                                <CreditCard className="h-5 w-5 text-accent shrink-0" />
+                                                <div>
+                                                    <p className="font-semibold text-sm">Cards & Net Banking</p>
+                                                    <p className="text-xs text-muted">Razorpay Gateway</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : activeMethod === 'manual_upi' ? (
+                                    <div className="rounded-xl border border-brand-tint bg-brand-pale/60 p-4">
+                                        <div className="flex items-center gap-2.5">
+                                            <Smartphone className="h-5 w-5 text-brand" />
+                                            <span className="font-semibold text-sm text-ink">Pay with UPI (GPay, PhonePe, Paytm, BHIM)</span>
+                                        </div>
+                                        <p className="mt-1.5 text-xs text-muted leading-relaxed">
+                                            You will be shown a QR code and UPI ID to pay from any UPI app. Once paid, simply enter your 12-digit UTR number to get immediate access.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-line bg-surface p-4">
+                                        <div className="flex items-center gap-2.5">
+                                            <Lock className="h-5 w-5 text-brand" />
+                                            <span className="font-semibold text-sm text-ink">Secure Checkout with Razorpay</span>
+                                        </div>
+                                        <p className="mt-1.5 text-xs text-muted">Cards, Netbanking, Wallets and UPI.</p>
+                                    </div>
+                                )}
+
                                 <Checkbox
                                     checked={terms}
                                     onChange={(e) => {
@@ -384,10 +463,10 @@ export default function Checkout() {
                                 <Checkbox checked={marketing} onChange={(e) => setMarketing(e.target.checked)} disabled={!verified} label="Email me about new eBooks and genuine offers (optional). Unsubscribe any time." />
                                 {payError && <Alert tone="error" title="Payment not completed">{payError}</Alert>}
                                 <Button size="lg" className="w-full" onClick={pay} loading={busy === 'pay'} disabled={!verified || !quote?.items?.length}>
-                                    <Lock className="h-4 w-4" /> {verified ? `Pay ${quote ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: quote.currency }).format(quote.total / 100) : ''} securely` : 'Verify your email to continue'}
+                                    <Lock className="h-4 w-4" /> {verified ? (activeMethod === 'manual_upi' ? `Continue to UPI Payment (${quote ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: quote.currency }).format(quote.total / 100) : ''})` : `Pay ${quote ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: quote.currency }).format(quote.total / 100) : ''} securely`) : 'Verify your email to continue'}
                                 </Button>
                                 <p className="text-center text-xs text-muted">
-                                    Payments are processed by Razorpay. We never see your card details. See our <Link to="/privacy">Privacy Policy</Link>. Need help? <Link to="/support">Contact support</Link>.
+                                    {activeMethod === 'manual_upi' ? 'Direct UPI transfer. Zero gateway fees. Verified instantly.' : 'Payments are processed by Razorpay. We never see your card details.'} See our <Link to="/privacy">Privacy Policy</Link>. Need help? <Link to="/support">Contact support</Link>.
                                 </p>
                             </div>
                         </section>
@@ -402,6 +481,99 @@ export default function Checkout() {
                         </div>
                     </aside>
                 </div>
+            )}
+
+            {upiOrder && (
+                <Modal
+                    open={Boolean(upiOrder)}
+                    onClose={() => finish(upiOrder.orderNumber)}
+                    title={`Scan & Pay via UPI · Order ${upiOrder.orderNumber}`}
+                    size="md"
+                >
+                    <div className="space-y-4 text-center">
+                        <div className="inline-block rounded-full bg-brand-pale px-4 py-1.5 text-sm font-bold text-brand">
+                            Amount to Pay: {new Intl.NumberFormat('en-IN', { style: 'currency', currency: upiOrder.currency }).format(upiOrder.amount / 100)}
+                        </div>
+
+                        <div>
+                            <img
+                                src={upiOrder.manualUpi?.qrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiOrder.manualUpi?.upiUri || '')}`}
+                                alt="UPI QR Code"
+                                className="mx-auto h-48 w-48 rounded-xl border border-line bg-white p-2 shadow-sm"
+                            />
+                            <p className="mt-2 text-xs text-muted">Scan with Google Pay, PhonePe, Paytm, BHIM, or any banking app</p>
+                        </div>
+
+                        <div className="rounded-xl border border-line bg-surface p-3 text-left text-sm space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-muted font-medium">UPI ID / VPA:</span>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(upiOrder.manualUpi?.upiId || '');
+                                        setCopied(true);
+                                        toast.success('UPI ID copied to clipboard!');
+                                        setTimeout(() => setCopied(false), 2000);
+                                    }}
+                                >
+                                    {copied ? <Check className="h-3.5 w-3.5 text-brand" /> : <Copy className="h-3.5 w-3.5" />}
+                                    {copied ? 'Copied' : 'Copy UPI ID'}
+                                </Button>
+                            </div>
+                            <p className="font-mono text-sm font-bold text-ink">{upiOrder.manualUpi?.upiId}</p>
+                            <p className="text-xs text-muted">Payee: <strong className="text-ink">{upiOrder.manualUpi?.payeeName}</strong></p>
+                        </div>
+
+                        {upiOrder.manualUpi?.upiUri && (
+                            <a
+                                href={upiOrder.manualUpi.upiUri}
+                                className="flex sm:hidden items-center justify-center gap-2 rounded-lg bg-brand text-white py-3 px-4 font-semibold text-sm w-full shadow-sm"
+                            >
+                                <Smartphone className="h-4 w-4" /> Open in UPI App (Google Pay / PhonePe)
+                            </a>
+                        )}
+
+                        <div className="border-t border-line pt-4 text-left space-y-3">
+                            <Input
+                                label="Enter 12-digit UPI Reference / UTR Number"
+                                placeholder="e.g. 428901234567"
+                                value={utr}
+                                onChange={(e) => setUtr(e.target.value.replace(/\s+/g, ''))}
+                                hint="Found in your UPI transaction receipt or bank SMS after paying."
+                            />
+                            <Button
+                                className="w-full"
+                                size="lg"
+                                loading={busy === 'utr'}
+                                disabled={!utr.trim()}
+                                onClick={async () => {
+                                    setBusy('utr');
+                                    try {
+                                        await api.post(`/checkout/order-status/${upiOrder.orderNumber}/submit-utr`, { utr: utr.trim() });
+                                        toast.success('Payment reference submitted! Checking status...');
+                                    } catch (err) {
+                                        toast.error(errorMessage(err));
+                                    } finally {
+                                        setBusy('');
+                                        finish(upiOrder.orderNumber);
+                                    }
+                                }}
+                            >
+                                Submit UTR & View Order
+                            </Button>
+                            <div className="text-center">
+                                <button
+                                    type="button"
+                                    onClick={() => finish(upiOrder.orderNumber)}
+                                    className="text-xs text-muted hover:text-ink hover:underline"
+                                >
+                                    I will submit UTR later on the order page →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Modal>
             )}
         </div>
     );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Download, MailPlus, RefreshCw, RotateCcw, StickyNote } from 'lucide-react';
+import { CheckCircle2, Download, MailPlus, RefreshCw, RotateCcw, StickyNote, XCircle } from 'lucide-react';
 import { Alert, Badge, Button, Checkbox, ConfirmDialog, Modal, PageLoader, Select, StatusBadge, Tabs, Textarea } from '../../components/ui';
 import { DataTable, FilterSelect, KeyValue, MoneyInput, PageHeader, Panel, SearchInput, downloadCsv, useAction, useAdminData } from '../components/kit';
 import { api } from '../../lib/api';
@@ -44,7 +44,23 @@ function OrdersList() {
                     { key: 'email', label: 'Customer' },
                     { key: 'items', label: 'Products', className: 'max-w-xs', render: (r) => <span className="line-clamp-2">{r.items.map((i) => i.title).join(', ')}</span> },
                     { key: 'total', label: 'Total', render: (r) => <>{money(r.total, r.currency)}{r.coupon?.code && <Badge tone="green" className="ml-1">{r.coupon.code}</Badge>}</> },
-                    { key: 'status', label: 'Payment', render: (r) => <StatusBadge status={r.status} /> },
+                    {
+                        key: 'status',
+                        label: 'Payment',
+                        render: (r) => (
+                            <div className="flex flex-col gap-1 items-start">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <StatusBadge status={r.status} />
+                                    <Badge tone={r.paymentMethod === 'manual_upi' ? 'blue' : 'gray'}>
+                                        {r.paymentMethod === 'manual_upi' ? 'UPI' : 'Razorpay'}
+                                    </Badge>
+                                </div>
+                                {r.manualPayment?.utr && (
+                                    <span className="font-mono text-[11px] text-muted">UTR: {r.manualPayment.utr}</span>
+                                )}
+                            </div>
+                        ),
+                    },
                     { key: 'deliveryStatus', label: 'Delivery', render: (r) => <StatusBadge status={r.deliveryStatus} /> },
                     { key: 'refundStatus', label: 'Refund', render: (r) => (r.refundStatus === 'none' ? '—' : <StatusBadge status={r.refundStatus} />) },
                     { key: 'createdAt', label: 'Created', render: (r) => dateTime(r.createdAt) },
@@ -83,7 +99,28 @@ function OrderDetail() {
                 description={<span className="flex flex-wrap gap-2"><StatusBadge status={order.status} /> <StatusBadge status={order.deliveryStatus} /> {order.refundStatus !== 'none' && <StatusBadge status={order.refundStatus} />}</span>}
                 actions={
                     <>
-                        {order.status === 'pending' || order.status === 'failed' || order.status === 'cancelled' ? (
+                        {order.status === 'pending' && order.paymentMethod === 'manual_upi' && (
+                            <>
+                                <Button
+                                    className="bg-brand text-white hover:bg-brand-dark"
+                                    loading={busy === 'approve'}
+                                    onClick={() => act('approve', () => api.post(`/admin/orders/${order._id}/approve-manual`).then((x) => x.data))}
+                                >
+                                    <CheckCircle2 className="h-4 w-4" /> Approve & Deliver eBook
+                                </Button>
+                                <Button
+                                    variant="outline-danger"
+                                    loading={busy === 'reject'}
+                                    onClick={() => {
+                                        const r = window.prompt('Reason for rejecting payment:');
+                                        if (r !== null) act('reject', () => api.post(`/admin/orders/${order._id}/reject-manual`, { reason: r }).then((x) => x.data));
+                                    }}
+                                >
+                                    <XCircle className="h-4 w-4" /> Reject Payment
+                                </Button>
+                            </>
+                        )}
+                        {(order.paymentMethod === 'razorpay' || order.razorpay?.orderId) && (order.status === 'pending' || order.status === 'failed' || order.status === 'cancelled') ? (
                             <Button variant="outline" loading={busy === 'rec'} onClick={() => act('rec', () => api.post(`/admin/orders/${order._id}/reconcile`).then((x) => x.data))}><RefreshCw className="h-4 w-4" /> Reconcile with Razorpay</Button>
                         ) : null}
                         {paid && <Button variant="outline" loading={busy === 'resend'} onClick={() => act('resend', () => api.post(`/admin/orders/${order._id}/resend-delivery`).then((x) => x.data))}><MailPlus className="h-4 w-4" /> Resend delivery email</Button>}
@@ -91,7 +128,18 @@ function OrderDetail() {
                     </>
                 }
             />
-            {order.status === 'pending' && <Alert tone="info">Orders can only become paid when Razorpay confirms a captured payment (via webhook, checkout callback or reconciliation). There is no manual “mark as paid”.</Alert>}
+            {order.status === 'pending' && order.paymentMethod === 'manual_upi' && (
+                <Alert tone="warning" title="Direct UPI Payment Awaiting Verification">
+                    {order.manualPayment?.utr ? (
+                        <span>Customer submitted UPI Reference / UTR: <strong className="font-mono text-ink text-base font-bold">{order.manualPayment.utr}</strong> on {dateTime(order.manualPayment.submittedAt)}. Check this reference in your UPI or banking app, then click <strong>Approve & Deliver eBook</strong> to grant access and send the download email automatically.</span>
+                    ) : (
+                        <span>Customer has not submitted their 12-digit UTR number yet. If they sent payment proof to you via WhatsApp or phone, you can approve the order directly using the button above.</span>
+                    )}
+                </Alert>
+            )}
+            {order.status === 'pending' && order.paymentMethod === 'razorpay' && (
+                <Alert tone="info">This order was created via Razorpay gateway. It will mark as paid automatically when captured, or you can reconcile with Razorpay above.</Alert>
+            )}
             <div className="grid gap-6 lg:grid-cols-3">
                 <Panel title="Summary" className="lg:col-span-2">
                     <KeyValue
@@ -100,9 +148,13 @@ function OrderDetail() {
                             ['Account', order.user ? <Link key="u" to={`/admin/customers/${order.user._id}`}>{order.user.name || order.user.email}</Link> : 'Guest'],
                             ['Created', dateTime(order.createdAt)],
                             ['Paid at', dateTime(order.paidAt)],
-                            ['Razorpay order', order.razorpay?.orderId],
-                            ['Razorpay payment', order.razorpay?.paymentId],
-                            ['Method', order.razorpay?.method],
+                            ['Payment method', order.paymentMethod === 'manual_upi' ? 'Direct UPI (Manual QR)' : 'Razorpay Gateway'],
+                            order.manualPayment?.utr && ['UPI Reference (UTR)', <strong key="utr" className="font-mono text-ink font-semibold">{order.manualPayment.utr}</strong>],
+                            order.manualPayment?.submittedAt && ['UTR submitted at', dateTime(order.manualPayment.submittedAt)],
+                            order.manualPayment?.approvedAt && ['Manual approval', `Approved on ${dateTime(order.manualPayment.approvedAt)}`],
+                            order.razorpay?.orderId && ['Razorpay order', order.razorpay?.orderId],
+                            order.razorpay?.paymentId && ['Razorpay payment', order.razorpay?.paymentId],
+                            ['Method', order.paymentMethod === 'manual_upi' ? 'UPI' : order.razorpay?.method],
                             ['Terms accepted', `${dateTime(order.termsAcceptedAt)} (v${order.termsVersion || '—'})`],
                             ['Marketing consent', order.marketingConsent ? 'Yes' : 'No'],
                             ['Source', [order.attribution?.source, order.attribution?.medium, order.attribution?.campaign].filter(Boolean).join(' / ') || '—'],

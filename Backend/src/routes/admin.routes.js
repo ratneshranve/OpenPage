@@ -89,6 +89,8 @@ router.get('/orders/:id', orders.getOrder);
 router.post('/orders/:id/notes', validate(z.object({ text: z.string().trim().min(1).max(2000) })), orders.addNote);
 router.post('/orders/:id/resend-delivery', orders.resendDelivery);
 router.post('/orders/:id/reconcile', orders.reconcile);
+router.post('/orders/:id/approve-manual', validate(z.object({ note: optStr(1000) }).partial().optional()), orders.approveManualPayment);
+router.post('/orders/:id/reject-manual', validate(z.object({ reason: optStr(1000) }).partial().optional()), orders.rejectManualPayment);
 router.post('/orders/:id/refunds', validate(z.object({ reason: z.string().trim().min(3).max(2000), category: z.enum(['inaccessible_file', 'defective_file', 'duplicate_charge', 'not_as_described', 'other']).default('other') })), orders.createRefundForOrder);
 router.patch('/entitlements/:entitlementId', validate(z.object({ status: z.enum(['active', 'revoked']), reason: optStr(300) })), orders.setEntitlementStatus);
 router.get('/payments', orders.listPayments);

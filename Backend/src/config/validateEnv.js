@@ -57,8 +57,11 @@ export const validateConfig = () => {
         if (config.isProduction) errors.push(message);
         else warnings.push(message);
     };
-    integration(config.razorpay.keyId && config.razorpay.keySecret, 'RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required for checkout');
-    integration(config.razorpay.webhookSecret, 'RAZORPAY_WEBHOOK_SECRET is required for webhook verification');
+    if (!config.razorpay.keyId || !config.razorpay.keySecret) {
+        warnings.push('RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is not configured. Online Razorpay gateway is disabled; manual UPI payments are active.');
+    } else if (!config.razorpay.webhookSecret) {
+        warnings.push('RAZORPAY_WEBHOOK_SECRET is not configured for Razorpay webhook verification.');
+    }
     integration(Boolean(config.brevoApiKey || (config.smtp.host && config.smtp.fromEmail)), 'BREVO_API_KEY or SMTP_HOST + SMTP_FROM_EMAIL is required to send OTP and delivery emails');
     if (config.isProduction && config.storage.provider === 'local') {
         warnings.push('STORAGE_PROVIDER=local stores eBooks on this server disk. Use private object storage (s3) in production.');

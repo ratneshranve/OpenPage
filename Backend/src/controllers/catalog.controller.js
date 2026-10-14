@@ -8,6 +8,7 @@ import { decorateProductsWithOffers, activeOfferFilter } from '../services/prici
 import { getSettings } from '../services/settings.service.js';
 import { firebaseWebConfig } from '../services/notification.service.js';
 import { sendPrivateFile } from '../services/storage.service.js';
+import { isRazorpayConfigured } from '../services/razorpay.service.js';
 import { config } from '../config/env.js';
 
 const PUBLIC_LIST_FIELDS = 'title slug subtitle shortDescription author publisher category tags coverImage price compareAtPrice currency featured language format pageCount productType publishedAt salesCount ratingAverage ratingCount';
@@ -177,8 +178,8 @@ export const getPage = asyncHandler(async (req, res) => {
 
 /** Everything the storefront needs to render chrome, tracking and consent. No secrets. */
 export const publicConfig = asyncHandler(async (_req, res) => {
-    const [general, homepage, footer, seo, tracking, notifications, features, contact, checkout] = await Promise.all(
-        ['general', 'homepage', 'footer', 'seo', 'tracking', 'notifications', 'features', 'contact', 'checkout'].map((s) => getSettings(s))
+    const [general, homepage, footer, seo, tracking, notifications, features, contact, checkout, payments] = await Promise.all(
+        ['general', 'homepage', 'footer', 'seo', 'tracking', 'notifications', 'features', 'contact', 'checkout', 'payments'].map((s) => getSettings(s))
     );
     ok(res, {
         general,
@@ -195,6 +196,20 @@ export const publicConfig = asyncHandler(async (_req, res) => {
         features,
         contact,
         checkout: { termsVersion: checkout.termsVersion, tax: checkout.tax },
+        payments: {
+            activeGateway: payments.activeGateway || 'manual_upi',
+            manualUpi: {
+                enabled: payments.manualUpi?.enabled ?? true,
+                upiId: payments.manualUpi?.upiId || 'ranveratnesh@okhdfcbank',
+                accountHolderName: payments.manualUpi?.accountHolderName || general.siteName || 'OpenPage',
+                qrCodeUrl: payments.manualUpi?.qrCodeUrl || '',
+                instructions: payments.manualUpi?.instructions || '',
+            },
+            razorpay: {
+                enabled: Boolean(payments.razorpay?.enabled && isRazorpayConfigured()),
+                keyId: config.razorpay.keyId || '',
+            },
+        },
         otp: { resendCooldownSeconds: config.otp.resendCooldownSeconds, ttlSeconds: config.otp.ttlSeconds },
     });
 });
