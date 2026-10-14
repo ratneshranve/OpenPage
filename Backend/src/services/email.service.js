@@ -10,7 +10,7 @@ import { hmac, normalizeEmail, safeEqual } from '../utils/helpers.js';
 import { buildEmailContext } from './emailContext.service.js';
 
 let transporter = null;
-const smtpConfigured = () => Boolean(config.smtp.host && config.smtp.fromEmail);
+const smtpConfigured = () => Boolean(config.brevoApiKey || (config.smtp.host && config.smtp.fromEmail));
 
 const getTransport = () => {
     if (transporter) return transporter;
@@ -33,7 +33,21 @@ const getTransport = () => {
 };
 
 export const verifySmtp = async () => {
-    if (!smtpConfigured()) return { configured: false, ok: false, error: 'SMTP_HOST / SMTP_FROM_EMAIL not set' };
+    if (config.brevoApiKey) {
+        try {
+            const res = await fetch('https://api.brevo.com/v3/account', {
+                headers: { 'api-key': config.brevoApiKey, accept: 'application/json' },
+            });
+            if (res.ok) {
+                const acc = await res.json();
+                return { configured: true, ok: true, provider: 'brevo', email: acc.email, companyName: acc.companyName };
+            }
+            return { configured: true, ok: false, provider: 'brevo', error: `Brevo API returned status ${res.status}` };
+        } catch (err) {
+            return { configured: true, ok: false, provider: 'brevo', error: err.message };
+        }
+    }
+    if (!smtpConfigured()) return { configured: false, ok: false, error: 'BREVO_API_KEY or SMTP_HOST / SMTP_FROM_EMAIL not set' };
     try {
         await getTransport().verify();
         return { configured: true, ok: true, host: config.smtp.host, port: config.smtp.port, secure: config.smtp.secure, from: config.smtp.fromEmail, user: config.smtp.user ? `${config.smtp.user.slice(0, 2)}***` : null };
@@ -104,6 +118,42 @@ export const renderEmail = async ({ template, to, data = {}, category }) => {
     return { subject, html, text: htmlToText(html), isMarketing };
 };
 
+const transmitViaBrevo = async ({ to, subject, html, text, headers }) => {
+    const fromEmail = config.smtp.fromEmail || 'ratneshranve@gmail.com';
+    const fromName = config.smtp.fromName || 'OpenPage';
+
+    const payload = {
+        sender: { name: fromName, email: fromEmail },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text || undefined,
+    };
+    if (config.smtp.replyTo) {
+        payload.replyTo = { email: config.smtp.replyTo };
+    }
+    if (headers && Object.keys(headers).length) {
+        payload.headers = headers;
+    }
+
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+            accept: 'application/json',
+            'api-key': config.brevoApiKey,
+            'content-type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const errorMsg = data.message || `Brevo API error (${res.status})`;
+        throw new Error(errorMsg);
+    }
+    return { messageId: data.messageId || `brevo-${Date.now()}`, response: JSON.stringify(data) };
+};
+
 const transmit = async ({ to, subject, html, text, isMarketing }) => {
     const headers = {};
     if (isMarketing) {
@@ -111,6 +161,11 @@ const transmit = async ({ to, subject, html, text, isMarketing }) => {
         headers['List-Unsubscribe'] = `<${url}>`;
         headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
     }
+
+    if (config.brevoApiKey) {
+        return transmitViaBrevo({ to, subject, html, text, headers });
+    }
+
     const info = await getTransport().sendMail({
         from: { name: config.smtp.fromName, address: config.smtp.fromEmail || 'no-reply@localhost' },
         replyTo: config.smtp.replyTo || undefined,

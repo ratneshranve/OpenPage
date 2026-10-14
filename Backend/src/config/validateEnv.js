@@ -59,7 +59,7 @@ export const validateConfig = () => {
     };
     integration(config.razorpay.keyId && config.razorpay.keySecret, 'RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET are required for checkout');
     integration(config.razorpay.webhookSecret, 'RAZORPAY_WEBHOOK_SECRET is required for webhook verification');
-    integration(config.smtp.host && config.smtp.fromEmail, 'SMTP_HOST and SMTP_FROM_EMAIL are required to send OTP and delivery emails');
+    integration(Boolean(config.brevoApiKey || (config.smtp.host && config.smtp.fromEmail)), 'BREVO_API_KEY or SMTP_HOST + SMTP_FROM_EMAIL is required to send OTP and delivery emails');
     if (config.isProduction && config.storage.provider === 'local') {
         warnings.push('STORAGE_PROVIDER=local stores eBooks on this server disk. Use private object storage (s3) in production.');
     }

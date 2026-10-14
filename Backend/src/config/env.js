@@ -68,6 +68,7 @@ export const config = {
         fromEmail: str('SMTP_FROM_EMAIL'),
         replyTo: str('SMTP_REPLY_TO'),
     },
+    brevoApiKey: str('BREVO_API_KEY'),
 
     storage: {
         provider: str('STORAGE_PROVIDER', 'local').toLowerCase(),
@@ -134,7 +135,7 @@ export const config = {
 export const integrationStatus = () => ({
     razorpay: Boolean(config.razorpay.keyId && config.razorpay.keySecret),
     razorpayWebhook: Boolean(config.razorpay.webhookSecret),
-    smtp: Boolean(config.smtp.host && config.smtp.fromEmail),
+    smtp: Boolean(config.brevoApiKey || (config.smtp.host && config.smtp.fromEmail)),
     firebaseAdmin: Boolean(config.firebase.projectId && config.firebase.clientEmail && config.firebase.privateKey),
     firebaseWeb: Boolean(config.firebase.webApiKey && config.firebase.appId && config.firebase.vapidKey),
     s3Storage: config.storage.provider === 's3' && Boolean(config.storage.bucket && config.storage.accessKeyId),
