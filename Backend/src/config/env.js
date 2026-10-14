@@ -30,7 +30,7 @@ export const config = {
     port,
     appName: str('APP_NAME', 'OpenPage'),
     frontendUrl,
-    apiBaseUrl: trimSlash(str('API_BASE_URL', `http://localhost:${port}`)),
+    apiBaseUrl: trimSlash(str('API_BASE_URL') || str('RENDER_EXTERNAL_URL') || `http://localhost:${port}`),
     appBaseUrl: trimSlash(str('APP_BASE_URL', frontendUrl)),
     serveFrontend: bool('SERVE_FRONTEND', false),
     trustProxy: num('TRUST_PROXY', 1),
