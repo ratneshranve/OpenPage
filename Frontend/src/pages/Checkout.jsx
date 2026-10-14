@@ -38,6 +38,7 @@ export default function Checkout() {
     const [payError, setPayError] = useState('');
     const tracked = useRef(false);
     const codeRef = useRef(null);
+    const userPrefilled = useRef(false);
 
     const ids = items.map((i) => i.id);
     const idsKey = ids.join(',');
@@ -49,7 +50,10 @@ export default function Checkout() {
                 removeMany(s.quote.invalidItems.map((i) => i.productId));
                 toast('Some unavailable items were removed from your cart.', { icon: 'ℹ️' });
             }
-            if (s.email) setEmail((prev) => prev || s.email);
+            if (!userPrefilled.current && s.email) {
+                userPrefilled.current = true;
+                setEmail(s.email);
+            }
             if (!tracked.current && s.quote?.items?.length) {
                 tracked.current = true;
                 trackInitiateCheckout(s.quote);
@@ -95,8 +99,11 @@ export default function Checkout() {
     }, [idsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
-        if (!email && user?.email) setEmail(user.email);
-    }, [user, email]);
+        if (!userPrefilled.current && user?.email) {
+            userPrefilled.current = true;
+            setEmail(user.email);
+        }
+    }, [user?.email]);
 
     useEffect(() => {
         if (cooldown <= 0) return undefined;
@@ -314,6 +321,7 @@ export default function Checkout() {
                                             inputMode="email"
                                             value={email}
                                             onChange={(e) => {
+                                                userPrefilled.current = true;
                                                 setEmail(e.target.value);
                                                 setEmailError('');
                                             }}
