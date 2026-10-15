@@ -21,6 +21,10 @@ const loadScript = (src, attrs = {}) =>
     });
 
 const initMeta = () => {
+    if (window.fbq) {
+        loaded.meta = true;
+        return;
+    }
     if (loaded.meta || !cfg?.meta?.enabled || !consent.advertising) return;
     loaded.meta = true;
     /* eslint-disable */
@@ -33,8 +37,10 @@ const initMeta = () => {
         s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s);
     })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
     /* eslint-enable */
-    window.fbq('init', cfg.meta.pixelId);
-    window.fbq('track', 'PageView');
+    if (cfg?.meta?.pixelId) {
+        window.fbq('init', cfg.meta.pixelId);
+        window.fbq('track', 'PageView');
+    }
 };
 
 const initGtag = () => {
@@ -77,12 +83,12 @@ export const configureTracking = (trackingConfig, consentState) => {
             analytics_storage: consent.analytics ? 'granted' : 'denied',
         });
     }
-    if (window.fbq && loaded.meta) window.fbq('consent', consent.advertising ? 'grant' : 'revoke');
+    if (window.fbq && consent?.advertising) window.fbq('consent', 'grant');
 };
 
 export const adsenseConfig = () => cfg?.adsense;
 
-const metaEnabled = (event) => loaded.meta && consent.advertising && cfg?.meta?.events?.[event] !== false && window.fbq;
+const metaEnabled = (event) => (loaded.meta || Boolean(window.fbq)) && (cfg?.meta?.events?.[event] !== false) && typeof window.fbq === 'function';
 
 export const trackPageView = () => {
     if (metaEnabled('PageView')) window.fbq('track', 'PageView');
