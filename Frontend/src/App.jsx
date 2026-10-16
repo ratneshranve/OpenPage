@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import Header from './components/layout/Header';
 import Footer from './components/layout/Footer';
 import { CookieBanner } from './components/layout/Extras';
+import ErrorBoundary from './components/layout/ErrorBoundary';
 import { PageLoader, Alert, Button } from './components/ui';
 import { useAuth } from './context/AuthContext';
 import { useConfig } from './context/ConfigContext';
@@ -50,9 +51,11 @@ function SiteLayout() {
                         </Alert>
                     </div>
                 )}
-                <Suspense fallback={<PageLoader />}>
-                    <Outlet />
-                </Suspense>
+                <ErrorBoundary>
+                    <Suspense fallback={<PageLoader />}>
+                        <Outlet />
+                    </Suspense>
+                </ErrorBoundary>
             </main>
             <Footer />
             <CookieBanner />
@@ -71,7 +74,7 @@ export function RequireAuth({ children, admin }) {
 
 export default function App() {
     return (
-        <>
+        <ErrorBoundary>
             <ScrollAndTrack />
             <Routes>
                 <Route path="/admin/*" element={<Suspense fallback={<PageLoader label="Loading admin…" />}><AdminApp /></Suspense>} />
@@ -117,6 +120,6 @@ export default function App() {
                     <Route path="*" element={<NotFound />} />
                 </Route>
             </Routes>
-        </>
+        </ErrorBoundary>
     );
 }
