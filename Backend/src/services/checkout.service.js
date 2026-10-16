@@ -40,17 +40,21 @@ const sanitizeAttribution = (a = {}) => {
     return out;
 };
 
-export const createSession = async ({ productIds, couponCode, attribution, user, ip }) => {
+export const createSession = async ({ productIds, couponCode, attribution, user, ip, email, customerName, customerPhone }) => {
     const ids = [...new Set(productIds)].filter((id) => mongoose.isValidObjectId(id)).slice(0, MAX_ITEMS);
     if (!ids.length) throw ApiError.badRequest('Your cart is empty.');
-    const { sessionTtlHours } = await getSettings('checkout');
+    const { sessionTtlHours, verificationValidMinutes } = await getSettings('checkout');
     const token = randomToken(32);
+    const normalizedEmail = email ? normalizeEmail(email) : (user?.email ? normalizeEmail(user.email) : undefined);
     const session = await CheckoutSession.create({
         tokenHash: sha256(token),
         items: ids.map((product) => ({ product })),
         couponCode: couponCode ? String(couponCode).trim().toUpperCase() : undefined,
-        customerName: user?.name || undefined,
-        customerPhone: user?.phoneNumber || undefined,
+        email: normalizedEmail,
+        emailVerifiedAt: normalizedEmail ? new Date() : undefined,
+        verificationExpiresAt: normalizedEmail ? addMinutes(new Date(), (verificationValidMinutes || 60) * 24) : undefined,
+        customerName: customerName ? String(customerName).trim().slice(0, 120) : (user?.name || undefined),
+        customerPhone: customerPhone ? String(customerPhone).trim().slice(0, 20) : (user?.phoneNumber || undefined),
         user: user?._id,
         attribution: sanitizeAttribution(attribution),
         ip,
@@ -59,7 +63,7 @@ export const createSession = async ({ productIds, couponCode, attribution, user,
     return { sessionToken: token, ...(await sessionView(session)) };
 };
 
-export const updateSession = async (session, { productIds, couponCode, customerName, customerPhone }) => {
+export const updateSession = async (session, { productIds, couponCode, customerName, customerPhone, email }) => {
     if (productIds) {
         const ids = [...new Set(productIds)].filter((id) => mongoose.isValidObjectId(id)).slice(0, MAX_ITEMS);
         session.items = ids.map((product) => ({ product }));
@@ -67,6 +71,17 @@ export const updateSession = async (session, { productIds, couponCode, customerN
     if (couponCode !== undefined) session.couponCode = couponCode ? String(couponCode).trim().toUpperCase() : undefined;
     if (customerName !== undefined) session.customerName = customerName ? String(customerName).trim().slice(0, 120) : undefined;
     if (customerPhone !== undefined) session.customerPhone = customerPhone ? String(customerPhone).trim().slice(0, 20) : undefined;
+    if (email !== undefined) {
+        if (email) {
+            session.email = normalizeEmail(email);
+            session.emailVerifiedAt = new Date();
+            session.verificationExpiresAt = addMinutes(new Date(), 72 * 60);
+        } else {
+            session.email = undefined;
+            session.emailVerifiedAt = undefined;
+            session.verificationExpiresAt = undefined;
+        }
+    }
     session.lastActivityAt = new Date();
     await session.save();
     return sessionView(session);
@@ -151,7 +166,24 @@ const paymentPayload = async (order, paymentsSettings) => {
  * Creates (or safely reuses) the internal order and handles Manual UPI or Razorpay gateway flow.
  * Preserves Razorpay configuration while allowing seamless manual UPI payments.
  */
-export const createOrder = async (session, { termsAccepted, marketingConsent, paymentMethod, customerName, customerPhone }, { user, ip }) => {
+export const createOrder = async (session, { termsAccepted = true, marketingConsent, paymentMethod, customerName, customerPhone, email }, { user, ip }) => {
+    const [checkoutSettings, paymentsSettings] = await Promise.all([
+        getSettings('checkout'),
+        getSettings('payments'),
+    ]);
+
+    const emailToUse = email ? normalizeEmail(email) : session.email;
+    if (!emailToUse) {
+        throw new ApiError(400, 'Please enter a valid email address before continuing to payment.', null, 'EMAIL_REQUIRED');
+    }
+
+    if (email || !session.emailVerifiedAt || session.verificationExpiresAt <= new Date()) {
+        session.email = emailToUse;
+        session.emailVerifiedAt = new Date();
+        session.verificationExpiresAt = addMinutes(new Date(), (checkoutSettings.verificationValidMinutes || 60) * 24);
+        await session.save();
+    }
+
     if (!isVerified(session)) throw new ApiError(403, 'Please verify your email address before continuing to payment.', null, 'EMAIL_NOT_VERIFIED');
     if (!termsAccepted) throw ApiError.badRequest('Please accept the Terms and Conditions to continue.');
 
@@ -172,11 +204,6 @@ export const createOrder = async (session, { termsAccepted, marketingConsent, pa
     if (session.couponCode && !quote.coupon?.valid) {
         throw new ApiError(409, quote.coupon?.message || 'Your coupon is no longer valid.', { coupon: quote.coupon }, 'COUPON_INVALID');
     }
-
-    const [checkoutSettings, paymentsSettings] = await Promise.all([
-        getSettings('checkout'),
-        getSettings('payments'),
-    ]);
 
     const activeGateway = paymentsSettings.activeGateway || 'manual_upi';
     let chosenMethod = paymentMethod || activeGateway;

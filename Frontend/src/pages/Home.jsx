@@ -5,7 +5,8 @@ import Seo from '../components/layout/Seo';
 import { AdSlot, NotificationPrompt } from '../components/layout/Extras';
 import { ProductGrid } from '../components/shop/ProductCard';
 import NewsletterForm from '../components/shop/NewsletterForm';
-import { Badge, Button } from '../components/ui';
+import QuickCheckoutModal from '../components/shop/QuickCheckoutModal';
+import { Badge, BookCover, Button } from '../components/ui';
 import { useConfig } from '../context/ConfigContext';
 import { useCart } from '../context/CartContext';
 import { get } from '../lib/api';
@@ -39,6 +40,8 @@ export default function Home() {
     const { items, count } = useCart();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [quickBuyProduct, setQuickBuyProduct] = useState(null);
+    const [selectedBookIndex, setSelectedBookIndex] = useState(0);
 
     const subtotal = items.reduce((acc, i) => acc + (Number(i.price) || 0), 0);
     const currency = items[0]?.currency || 'INR';
@@ -67,6 +70,14 @@ export default function Home() {
                 });
         }
     }, []);
+
+    const allProducts = [
+        ...(data?.featured || []),
+        ...(data?.bestsellers || []),
+        ...(data?.recent || []),
+    ];
+    const uniqueProducts = allProducts.filter((p, idx, arr) => arr.findIndex((x) => x._id === p._id) === idx);
+    const primaryBook = uniqueProducts[selectedBookIndex] || uniqueProducts[0] || null;
 
     const home = config?.homepage;
     const sec = home?.sections || {};
@@ -119,14 +130,130 @@ export default function Home() {
 
             {/* Hero */}
             <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-accent-pale/60 to-white">
-                <div className="container-page grid items-center gap-10 py-14 sm:py-20 lg:grid-cols-2">
+                <div className="container-page grid items-center gap-10 py-10 sm:py-20 lg:grid-cols-2">
                     <div>
                         {hero.eyebrow && <Badge tone="green">{hero.eyebrow}</Badge>}
-                        <h1 className="mt-4 text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">{hero.title || 'Practical eBooks that help you work smarter'}</h1>
-                        <p className="mt-5 max-w-xl text-lg leading-8 text-ink-soft">{hero.subtitle}</p>
-                        <div className="mt-8 flex flex-wrap gap-3">
+                        <h1 className="mt-3 text-3xl font-extrabold leading-[1.15] tracking-tight sm:text-5xl">{hero.title || 'Practical eBooks that help you work smarter'}</h1>
+                        <p className="mt-3 max-w-xl text-base leading-7 text-ink-soft sm:text-lg sm:leading-8">{hero.subtitle}</p>
+
+                        {/* Mobile Instant Book Showcase Card: visible immediately on mobile without scrolling */}
+                        {primaryBook && (
+                            <div className="block lg:hidden my-6">
+                                <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 via-white to-surface p-4 shadow-xl ring-1 ring-emerald-500/20">
+                                    <div className="flex items-center justify-between gap-2 mb-3">
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white shadow-xs">
+                                            <Zap className="h-3.5 w-3.5 fill-yellow-300 text-yellow-300" /> Instant Buy
+                                        </span>
+                                        {primaryBook.ratingAverage > 0 && (
+                                            <span className="flex items-center gap-1 text-xs font-semibold text-ink">
+                                                <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                                                {primaryBook.ratingAverage.toFixed(1)} ({primaryBook.ratingCount || 1})
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-3.5 items-center">
+                                        <Link to={`/ebooks/${primaryBook.slug}`} className="shrink-0 block group">
+                                            <div className="relative w-24 h-32 rounded-xl overflow-hidden shadow-md ring-1 ring-line/80 group-hover:scale-105 transition">
+                                                {primaryBook.coverImage?.url ? (
+                                                    <img src={primaryBook.coverImage.url} alt={primaryBook.title} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <BookCover title={primaryBook.title} className="w-full h-full" />
+                                                )}
+                                                <span className="absolute bottom-1 right-1 rounded bg-black/75 px-1 py-0.5 text-[9px] font-bold text-white uppercase">
+                                                    PDF
+                                                </span>
+                                            </div>
+                                        </Link>
+
+                                        <div className="min-w-0 flex-1">
+                                            <Link to={`/ebooks/${primaryBook.slug}`} className="no-underline">
+                                                <h3 className="text-base font-extrabold text-ink leading-snug line-clamp-2 hover:text-brand">
+                                                    {primaryBook.title}
+                                                </h3>
+                                            </Link>
+                                            <p className="mt-0.5 text-xs text-brand font-medium">Instant PDF Download</p>
+
+                                            <div className="mt-2 flex items-baseline gap-2">
+                                                <span className="text-2xl font-black text-brand tracking-tight">
+                                                    {money(primaryBook.finalPrice, primaryBook.currency)}
+                                                </span>
+                                                {primaryBook.originalPrice && primaryBook.originalPrice > primaryBook.finalPrice && (
+                                                    <>
+                                                        <span className="text-xs text-muted line-through">
+                                                            {money(primaryBook.originalPrice, primaryBook.currency)}
+                                                        </span>
+                                                        <span className="rounded bg-emerald-100 px-1.5 py-0.2 text-[10px] font-bold text-emerald-800">
+                                                            {Math.round(((primaryBook.originalPrice - primaryBook.finalPrice) / primaryBook.originalPrice) * 100)}% OFF
+                                                        </span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Big Instant Buy Now Button */}
+                                    <div className="mt-4">
+                                        <button
+                                            type="button"
+                                            onClick={() => setQuickBuyProduct(primaryBook)}
+                                            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 py-3.5 px-4 font-extrabold text-white text-base shadow-lg shadow-brand/20 active:scale-[0.98] transition cursor-pointer hover:brightness-105"
+                                        >
+                                            <Zap className="h-5 w-5 fill-yellow-300 text-yellow-300 animate-bounce" />
+                                            <span>Buy Now · {money(primaryBook.finalPrice, primaryBook.currency)}</span>
+                                            <ArrowRight className="h-4 w-4 ml-1" />
+                                        </button>
+                                    </div>
+
+                                    {/* Security & trust row */}
+                                    <div className="mt-2.5 flex items-center justify-center gap-3 text-[11px] text-muted">
+                                        <span className="flex items-center gap-1 font-medium text-ink-soft">
+                                            <Zap className="h-3 w-3 text-brand" /> Instant UPI QR
+                                        </span>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1 font-medium text-ink-soft">
+                                            <Lock className="h-3 w-3 text-brand" /> Instant Access
+                                        </span>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1 font-medium text-ink-soft">
+                                            <Check className="h-3 w-3 text-brand" /> No App Needed
+                                        </span>
+                                    </div>
+
+                                    {/* Switch book pills if multiple books exist */}
+                                    {uniqueProducts.length > 1 && (
+                                        <div className="mt-3.5 pt-3 border-t border-line/60">
+                                            <p className="text-[11px] font-semibold text-muted mb-1.5">More eBooks to buy:</p>
+                                            <div className="flex gap-2 overflow-x-auto pb-1">
+                                                {uniqueProducts.slice(0, 5).map((p, idx) => (
+                                                    <button
+                                                        key={p._id}
+                                                        type="button"
+                                                        onClick={() => setSelectedBookIndex(idx)}
+                                                        className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold transition cursor-pointer border ${
+                                                            selectedBookIndex === idx
+                                                                ? 'bg-brand text-white border-brand shadow-xs'
+                                                                : 'bg-white text-ink-soft border-line hover:bg-surface'
+                                                        }`}
+                                                    >
+                                                        {p.title} ({money(p.finalPrice, p.currency)})
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex flex-wrap gap-3">
+                            {primaryBook && (
+                                <Button size="lg" className="hidden lg:inline-flex bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 font-extrabold text-white shadow-md hover:brightness-105" onClick={() => setQuickBuyProduct(primaryBook)}>
+                                    <Zap className="h-4 w-4 fill-yellow-300 text-yellow-300" /> Buy Now · {money(primaryBook.finalPrice, primaryBook.currency)}
+                                </Button>
+                            )}
                             {hero.primaryCtaText && (
-                                <Button as={Link} to={hero.primaryCtaLink || '/ebooks'} size="lg">
+                                <Button as={Link} to={hero.primaryCtaLink || '/ebooks'} size="lg" variant={primaryBook ? 'outline' : 'primary'}>
                                     {hero.primaryCtaText} <ArrowRight className="h-4 w-4" />
                                 </Button>
                             )}
@@ -136,9 +263,9 @@ export default function Home() {
                                 </Button>
                             )}
                         </div>
-                        <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
-                            <li className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-brand" /> Secure Razorpay checkout</li>
-                            <li className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-brand" /> Instant email delivery</li>
+                        <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
+                            <li className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-brand" /> Direct UPI / QR payment</li>
+                            <li className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-brand" /> Instant download link</li>
                             <li className="flex items-center gap-1.5"><BookOpen className="h-4 w-4 text-brand" /> Re-download any time</li>
                         </ul>
                     </div>
@@ -148,15 +275,21 @@ export default function Home() {
                         ) : (
                             <div className="relative mx-auto grid max-w-md grid-cols-2 gap-4">
                                 {(data?.featured?.length ? data.featured : data?.recent || []).slice(0, 4).map((p, i) => (
-                                    <Link key={p._id} to={`/ebooks/${p.slug}`} className={`block no-underline ${i % 2 ? 'translate-y-8' : ''}`}>
+                                    <div key={p._id} className={`block no-underline cursor-pointer group ${i % 2 ? 'translate-y-8' : ''}`} onClick={() => setQuickBuyProduct(p)}>
                                         {p.coverImage?.url ? (
-                                            <img src={p.coverImage.url} alt={p.title} className="aspect-[3/4] w-full rounded-xl object-cover shadow-lg ring-1 ring-line" />
+                                            <div className="relative">
+                                                <img src={p.coverImage.url} alt={p.title} className="aspect-[3/4] w-full rounded-xl object-cover shadow-lg ring-1 ring-line group-hover:scale-105 transition" />
+                                                <div className="absolute inset-x-2 bottom-2 rounded-lg bg-black/80 backdrop-blur-xs p-2 text-center text-white text-xs font-bold opacity-0 group-hover:opacity-100 transition">
+                                                    Buy Now · {money(p.finalPrice, p.currency)}
+                                                </div>
+                                            </div>
                                         ) : (
-                                            <div className="flex aspect-[3/4] flex-col justify-end rounded-xl bg-gradient-to-br from-accent to-brand p-4 text-white shadow-lg">
+                                            <div className="flex aspect-[3/4] flex-col justify-end rounded-xl bg-gradient-to-br from-accent to-brand p-4 text-white shadow-lg group-hover:scale-105 transition">
                                                 <span className="text-base font-bold leading-snug">{p.title}</span>
+                                                <span className="text-xs font-semibold text-yellow-300 mt-2">Buy Now · {money(p.finalPrice, p.currency)}</span>
                                             </div>
                                         )}
-                                    </Link>
+                                    </div>
                                 ))}
                             </div>
                         )}
@@ -201,7 +334,7 @@ export default function Home() {
 
             {sec.featured !== false && (loading || data?.featured?.length > 0) && (
                 <Section title="Featured eBooks" subtitle="Hand-picked guides to get you started" link={{ to: '/ebooks', label: 'View all' }}>
-                    <ProductGrid products={data?.featured || []} loading={loading} count={4} />
+                    <ProductGrid products={data?.featured || []} loading={loading} count={4} onQuickBuy={setQuickBuyProduct} />
                 </Section>
             )}
 
@@ -221,7 +354,7 @@ export default function Home() {
 
             {sec.bestsellers !== false && data?.bestsellers?.length > 0 && (
                 <Section title="Bestsellers" subtitle="Our most purchased titles" link={{ to: '/ebooks?sort=popular', label: 'See more' }}>
-                    <ProductGrid products={data.bestsellers.slice(0, 8)} />
+                    <ProductGrid products={data.bestsellers.slice(0, 8)} onQuickBuy={setQuickBuyProduct} />
                 </Section>
             )}
 
@@ -229,7 +362,7 @@ export default function Home() {
 
             {sec.recent !== false && (loading || data?.recent?.length > 0) && (
                 <Section title="New releases" subtitle="Recently published eBooks" link={{ to: '/ebooks?sort=newest', label: 'See all new' }}>
-                    <ProductGrid products={data?.recent || []} loading={loading} count={4} />
+                    <ProductGrid products={data?.recent || []} loading={loading} count={4} onQuickBuy={setQuickBuyProduct} />
                 </Section>
             )}
 
@@ -354,6 +487,12 @@ export default function Home() {
                     </div>
                 </aside>
             )}
+
+            <QuickCheckoutModal
+                product={quickBuyProduct}
+                open={Boolean(quickBuyProduct)}
+                onClose={() => setQuickBuyProduct(null)}
+            />
         </>
     );
 }

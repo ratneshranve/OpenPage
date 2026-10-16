@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Check, Star } from 'lucide-react';
+import { ShoppingCart, Check, Star, Zap } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { Badge, BookCover, Button, Price, Skeleton } from '../ui';
 
-export function ProductCard({ product }) {
+export function ProductCard({ product, onQuickBuy }) {
     const { add, has } = useCart();
     const inCart = has(product._id);
     return (
@@ -29,19 +29,25 @@ export function ProductCard({ product }) {
                         <span className="font-medium text-ink">{product.ratingAverage.toFixed(1)}</span> ({product.ratingCount})
                     </p>
                 )}
-                <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-                    <Price product={product} />
-                    <Button size="sm" variant={inCart ? 'outline' : 'primary'} onClick={() => add(product)} aria-label={inCart ? `${product.title} is in your cart` : `Add ${product.title} to cart`}>
-                        {inCart ? <Check className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
-                        <span className="hidden sm:inline">{inCart ? 'In cart' : 'Add'}</span>
-                    </Button>
+                <div className="mt-auto flex flex-col gap-2 pt-3">
+                    <div className="flex items-end justify-between gap-2">
+                        <Price product={product} />
+                        <Button size="sm" variant={inCart ? 'outline' : 'ghost'} onClick={() => add(product)} className="border border-line h-8 px-2 text-xs" aria-label={inCart ? `${product.title} is in your cart` : `Add ${product.title} to cart`}>
+                            {inCart ? <Check className="h-3.5 w-3.5 text-brand" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+                        </Button>
+                    </div>
+                    {onQuickBuy && (
+                        <Button size="sm" className="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white font-bold h-9 text-xs shadow-xs" onClick={() => onQuickBuy(product)}>
+                            <Zap className="h-3.5 w-3.5 fill-yellow-300 text-yellow-300" /> Buy Now
+                        </Button>
+                    )}
                 </div>
             </div>
         </article>
     );
 }
 
-export function ProductGrid({ products, loading, count = 8, columns = 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' }) {
+export function ProductGrid({ products, loading, count = 8, columns = 'sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4', onQuickBuy }) {
     if (loading) {
         return (
             <div className={`grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 ${columns}`}>
@@ -58,7 +64,7 @@ export function ProductGrid({ products, loading, count = 8, columns = 'sm:grid-c
     return (
         <div className={`grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-6 ${columns}`}>
             {products.map((p) => (
-                <ProductCard key={p._id} product={p} />
+                <ProductCard key={p._id} product={p} onQuickBuy={onQuickBuy} />
             ))}
         </div>
     );

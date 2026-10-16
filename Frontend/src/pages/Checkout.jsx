@@ -121,7 +121,8 @@ export default function Checkout() {
         return () => clearTimeout(t);
     }, [cooldown]);
 
-    const verified = session?.emailVerified && session.email === email.trim().toLowerCase();
+    const isOtpVerified = session?.emailVerified && session.email === email.trim().toLowerCase();
+    const verified = EMAIL_RX.test(email.trim());
 
     const sendCode = async () => {
         setEmailError('');
@@ -222,7 +223,10 @@ export default function Checkout() {
     const pay = async () => {
         setPayError('');
         setTermsError('');
-        if (!verified) return setPayError('Please verify your email address before continuing to payment.');
+        if (!EMAIL_RX.test(email.trim())) {
+            setEmailError('Please enter a valid email address.');
+            return setPayError('Please enter a valid email address before continuing to payment.');
+        }
         if (!terms) return setTermsError('Please accept the Terms and Conditions to continue.');
         setBusy('pay');
         let order;
@@ -231,6 +235,7 @@ export default function Checkout() {
                 await loadRazorpay();
             }
             order = (await api.post('/checkout/create-order', {
+                email: email.trim(),
                 termsAccepted: true,
                 marketingConsent: marketing,
                 paymentMethod: activeMethod,
@@ -328,76 +333,68 @@ export default function Checkout() {
             {session && (
                 <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_400px]">
                     <div className="space-y-6">
-                        {/* Step 1: email verification */}
+                        {/* Step 1: Customer details */}
                         <section className="card p-6" aria-labelledby="step-email">
                             <div className="flex items-center gap-3">
                                 <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${verified ? 'bg-brand text-white' : 'bg-accent-pale text-accent'}`}>{verified ? <CheckCircle2 className="h-5 w-5" /> : 1}</span>
-                                <h2 id="step-email" className="text-lg font-semibold">Verify your email</h2>
+                                <h2 id="step-email" className="text-lg font-semibold">Contact & Delivery details</h2>
                             </div>
-                            <p className="mt-2 text-sm text-muted">Your download link and receipt are sent here. We verify it with a one-time code so your eBook reaches the right inbox.</p>
+                            <p className="mt-2 text-sm text-muted">Your eBook download link, license, and payment receipt will be delivered instantly to this email address.</p>
 
-                            {verified ? (
-                                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-tint bg-brand-pale p-4">
-                                    <p className="flex items-center gap-2 text-sm">
-                                        <ShieldCheck className="h-5 w-5 text-brand" /> <span className="font-medium">{session.email}</span> <span className="text-muted">verified</span>
-                                    </p>
-                                    <Button variant="ghost" size="sm" onClick={changeEmail}>
-                                        <Pencil className="h-4 w-4" /> Change
-                                    </Button>
-                                </div>
-                            ) : (
-                                <div className="mt-4 space-y-4">
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                                        <Input
-                                            className="flex-1"
-                                            label="Email address"
-                                            type="email"
-                                            autoComplete="email"
-                                            inputMode="email"
-                                            value={email}
-                                            onChange={(e) => {
-                                                userPrefilled.current = true;
-                                                setEmail(e.target.value);
-                                                setEmailError('');
-                                            }}
-                                            error={emailError}
-                                            required
-                                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), sendCode())}
-                                        />
-                                        <Button variant="secondary" className="sm:mt-[30px]" onClick={sendCode} loading={busy === 'send'} disabled={cooldown > 0}>
-                                            <Mail className="h-4 w-4" />
-                                            {cooldown > 0 ? `Resend in ${cooldown}s` : codeSent ? 'Resend code' : 'Send code'}
+                            <div className="mt-4 space-y-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                                    <Input
+                                        className="flex-1"
+                                        label="Email address"
+                                        type="email"
+                                        autoComplete="email"
+                                        inputMode="email"
+                                        placeholder="yourname@gmail.com"
+                                        value={email}
+                                        onChange={(e) => {
+                                            userPrefilled.current = true;
+                                            setEmail(e.target.value);
+                                            setEmailError('');
+                                        }}
+                                        error={emailError}
+                                        required
+                                        hint={isOtpVerified ? "✓ Verified email address" : "We will send your download link here"}
+                                    />
+                                    {!isOtpVerified && (
+                                        <Button variant="outline" size="sm" className="sm:mt-[30px] text-xs h-10 shrink-0" onClick={sendCode} loading={busy === 'send'} disabled={cooldown > 0 || !EMAIL_RX.test(email.trim())}>
+                                            <Mail className="h-3.5 w-3.5" />
+                                            {cooldown > 0 ? `Resend in ${cooldown}s` : codeSent ? 'Resend OTP' : 'Verify via OTP (Optional)'}
                                         </Button>
-                                    </div>
-                                    {codeSent && (
-                                        <form onSubmit={verifyCode} className="flex flex-col gap-3 sm:flex-row sm:items-start" noValidate>
-                                            <Input
-                                                ref={codeRef}
-                                                label="6-digit code"
-                                                hint={`We sent a code to ${email.trim()}. It expires in ${Math.round((config?.otp?.ttlSeconds || 300) / 60)} minutes. Check your spam folder if you cannot find it.`}
-                                                inputMode="numeric"
-                                                autoComplete="one-time-code"
-                                                maxLength={6}
-                                                value={code}
-                                                onChange={(e) => {
-                                                    setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
-                                                    setCodeError('');
-                                                }}
-                                                error={codeError}
-                                                className="flex-1 [&_input]:tracking-[0.4em] [&_input]:text-lg"
-                                            />
-                                            <Button type="submit" className="sm:mt-[30px]" loading={busy === 'verify'}>
-                                                Verify
-                                            </Button>
-                                        </form>
                                     )}
                                 </div>
-                            )}
+                                {codeSent && !isOtpVerified && (
+                                    <form onSubmit={verifyCode} className="flex flex-col gap-3 sm:flex-row sm:items-start p-3 bg-brand-pale/50 rounded-xl border border-brand-tint" noValidate>
+                                        <Input
+                                            ref={codeRef}
+                                            label="6-digit verification code"
+                                            hint={`We sent an OTP code to ${email.trim()}.`}
+                                            inputMode="numeric"
+                                            autoComplete="one-time-code"
+                                            maxLength={6}
+                                            value={code}
+                                            onChange={(e) => {
+                                                setCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                                setCodeError('');
+                                            }}
+                                            error={codeError}
+                                            className="flex-1 [&_input]:tracking-[0.4em] [&_input]:text-lg"
+                                        />
+                                        <Button type="submit" className="sm:mt-[30px]" loading={busy === 'verify'}>
+                                            Verify OTP
+                                        </Button>
+                                    </form>
+                                )}
+                            </div>
 
                             <div className="mt-5 pt-4 border-t border-line/70">
                                 <div className="grid gap-3 sm:grid-cols-2">
                                     <Input
-                                        label="Full name (optional)"
+                                        label="Full name"
                                         placeholder="e.g. Alex Johnson"
                                         autoComplete="name"
                                         value={customerName}
@@ -405,7 +402,7 @@ export default function Checkout() {
                                         hint="For receipts and personalization"
                                     />
                                     <Input
-                                        label="Phone number (optional)"
+                                        label="Phone / WhatsApp number"
                                         type="tel"
                                         placeholder="e.g. +91 98765 43210"
                                         autoComplete="tel"

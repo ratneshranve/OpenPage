@@ -30,14 +30,14 @@ router.get('/reviews/featured', catalog.featuredReviews);
 router.get('/pages/:slug', catalog.getPage);
 
 // ---- Checkout ----
-router.post('/checkout/sessions', checkoutLimiter, optionalAuth, validate(z.object({ productIds: z.array(objectId).min(1).max(25), couponCode: coupon, attribution })), checkout.createSession);
+router.post('/checkout/sessions', checkoutLimiter, optionalAuth, validate(z.object({ productIds: z.array(objectId).min(1).max(25), couponCode: coupon, email: email.optional().nullable(), customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable(), attribution })), checkout.createSession);
 router.get('/checkout/sessions/current', checkout.getSession);
-router.patch('/checkout/sessions/current', checkoutLimiter, validate(z.object({ productIds: z.array(objectId).max(25).optional(), couponCode: coupon, customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable() })), checkout.updateSession);
+router.patch('/checkout/sessions/current', checkoutLimiter, validate(z.object({ productIds: z.array(objectId).max(25).optional(), couponCode: coupon, email: email.optional().nullable(), customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable() })), checkout.updateSession);
 router.post('/checkout/sessions/resume', checkoutLimiter, validate(z.object({ sid: objectId, sig: z.string().max(64) })), checkout.resumeSession);
 router.post('/checkout/otp/send', otpLimiter, validate(z.object({ email })), checkout.sendOtp);
 router.post('/checkout/otp/verify', otpLimiter, validate(z.object({ email, code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code') })), checkout.verifyOtp);
 router.post('/checkout/validate-coupon', checkoutLimiter, validate(z.object({ productIds: z.array(objectId).max(25).optional(), couponCode: coupon })), checkout.validateCoupon);
-router.post('/checkout/create-order', checkoutLimiter, optionalAuth, validate(z.object({ termsAccepted: z.literal(true, { errorMap: () => ({ message: 'Please accept the Terms and Conditions' }) }), marketingConsent: z.boolean().optional().default(false), paymentMethod: z.enum(['razorpay', 'manual_upi']).optional(), customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable() })), checkout.createOrder);
+router.post('/checkout/create-order', checkoutLimiter, optionalAuth, validate(z.object({ email: email.optional().nullable(), termsAccepted: z.boolean().optional().default(true), marketingConsent: z.boolean().optional().default(false), paymentMethod: z.enum(['razorpay', 'manual_upi']).optional(), customerName: z.string().trim().max(120).optional().nullable(), customerPhone: z.string().trim().max(20).optional().nullable() })), checkout.createOrder);
 router.get('/checkout/order-status/:orderId', optionalAuth, checkout.orderStatus);
 router.post('/checkout/order-status/:orderId/submit-utr', checkoutLimiter, optionalAuth, validate(z.object({ utr: z.string().trim().min(4, 'Enter a valid reference / UTR number').max(64) })), checkout.submitUtr);
 router.post('/checkout/order-status/:orderId/tracked', optionalAuth, checkout.conversionTracked);

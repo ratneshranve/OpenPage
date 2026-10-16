@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import Seo, { breadcrumbLd, siteOrigin } from '../components/layout/Seo';
 import { AdSlot, Breadcrumbs, Markdown } from '../components/layout/Extras';
 import { ProductGrid } from '../components/shop/ProductCard';
+import QuickCheckoutModal from '../components/shop/QuickCheckoutModal';
 import { Alert, Badge, BookCover, Button, PageLoader, Price } from '../components/ui';
 import { useCart } from '../context/CartContext';
 import { useConfig } from '../context/ConfigContext';
@@ -31,6 +32,8 @@ export default function Product() {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [activeImage, setActiveImage] = useState(0);
+    const [quickBuyOpen, setQuickBuyOpen] = useState(false);
+    const [selectedRelated, setSelectedRelated] = useState(null);
 
     useEffect(() => {
         setData(null);
@@ -77,8 +80,7 @@ export default function Product() {
     };
 
     const buyNow = () => {
-        add(p, { silent: true });
-        navigate('/checkout');
+        setQuickBuyOpen(true);
     };
 
     const share = async () => {
@@ -291,21 +293,35 @@ export default function Product() {
             {related.length > 0 && (
                 <section className="mt-16">
                     <h2 className="mb-6 text-2xl font-bold">You may also like</h2>
-                    <ProductGrid products={related} />
+                    <ProductGrid products={related} onQuickBuy={setSelectedRelated} />
                 </section>
             )}
 
             {/* Sticky mobile purchase bar */}
-            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white p-3 lg:hidden">
+            <div className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 backdrop-blur-md p-3 lg:hidden shadow-lg">
                 <div className="flex items-center gap-3">
                     <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{p.title}</p>
-                        <p className="font-bold">{money(p.finalPrice, p.currency)}</p>
+                        <p className="truncate text-sm font-bold text-ink">{p.title}</p>
+                        <p className="font-extrabold text-brand text-base">{money(p.finalPrice, p.currency)}</p>
                     </div>
-                    <Button onClick={buyNow}>Buy now</Button>
+                    <Button onClick={buyNow} className="bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 font-extrabold text-white shadow-md">
+                        <Zap className="h-4 w-4 fill-yellow-300 text-yellow-300" /> Buy now
+                    </Button>
                 </div>
             </div>
             <div className="h-16 lg:hidden" aria-hidden />
+
+            <QuickCheckoutModal
+                product={p}
+                open={quickBuyOpen}
+                onClose={() => setQuickBuyOpen(false)}
+            />
+
+            <QuickCheckoutModal
+                product={selectedRelated}
+                open={Boolean(selectedRelated)}
+                onClose={() => setSelectedRelated(null)}
+            />
         </div>
     );
 }

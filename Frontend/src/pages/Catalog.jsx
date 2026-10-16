@@ -4,6 +4,7 @@ import { SearchX, SlidersHorizontal } from 'lucide-react';
 import Seo, { breadcrumbLd } from '../components/layout/Seo';
 import { AdSlot, Breadcrumbs, Markdown } from '../components/layout/Extras';
 import { ProductGrid } from '../components/shop/ProductCard';
+import QuickCheckoutModal from '../components/shop/QuickCheckoutModal';
 import { Alert, Button, EmptyState, Pagination } from '../components/ui';
 import { get, errorMessage } from '../lib/api';
 import { trackSearch } from '../lib/tracking';
@@ -36,6 +37,7 @@ export default function Catalog() {
     const [error, setError] = useState('');
     const [notFound, setNotFound] = useState(false);
     const [filtersOpen, setFiltersOpen] = useState(false);
+    const [quickBuyProduct, setQuickBuyProduct] = useState(null);
 
     const q = params.get('q') || '';
     const sort = params.get('sort') || '';
@@ -158,12 +160,18 @@ export default function Catalog() {
                             Try a different search term or remove some filters.
                         </EmptyState>
                     ) : (
-                        <ProductGrid products={data?.items || []} loading={loading} count={6} columns="sm:grid-cols-2 md:grid-cols-3" />
+                        <ProductGrid products={data?.items || []} loading={loading} count={6} columns="sm:grid-cols-2 md:grid-cols-3" onQuickBuy={setQuickBuyProduct} />
                     )}
                     {data && <Pagination page={data.pagination.page} pages={data.pagination.pages} onChange={(p) => update({ page: String(p) })} />}
                 </div>
             </div>
             <AdSlot placement="catalog_bottom" />
+
+            <QuickCheckoutModal
+                product={quickBuyProduct}
+                open={Boolean(quickBuyProduct)}
+                onClose={() => setQuickBuyProduct(null)}
+            />
         </div>
     );
 }
