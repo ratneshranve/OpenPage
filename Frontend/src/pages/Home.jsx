@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BadgeCheck, BookOpen, Clock, Download, Lock, MailCheck, ShoppingBag, ShoppingCart, Star, Tag, X, Zap } from 'lucide-react';
+import { ArrowRight, BadgeCheck, BookOpen, Check, Clock, Download, Lock, MailCheck, ShoppingBag, ShoppingCart, Star, Tag, X, Zap } from 'lucide-react';
 import Seo from '../components/layout/Seo';
 import { AdSlot, NotificationPrompt } from '../components/layout/Extras';
 import { ProductGrid } from '../components/shop/ProductCard';
