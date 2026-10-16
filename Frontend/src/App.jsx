@@ -32,7 +32,7 @@ function ScrollAndTrack() {
     const { pathname, search } = useLocation();
     useEffect(() => {
         window.scrollTo(0, 0);
-        trackPageView();
+        trackPageView(pathname);
     }, [pathname, search]);
     return null;
 }

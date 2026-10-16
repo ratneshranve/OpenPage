@@ -96,9 +96,41 @@ export const adsenseConfig = () => cfg?.adsense;
 
 const metaEnabled = (event) => (loaded.meta || Boolean(window.fbq)) && (cfg?.meta?.events?.[event] !== false) && typeof window.fbq === 'function';
 
-export const trackPageView = () => {
+export const GA_MEASUREMENT_ID = 'G-L2MSESDJN4';
+
+let gaConfigured = !window.location.pathname.startsWith('/admin');
+
+export const setGaDisabled = (disabled) => {
+    const flag = Boolean(disabled);
+    window[`ga-disable-${GA_MEASUREMENT_ID}`] = flag;
+    if (cfg?.googleAds?.tagId) {
+        window[`ga-disable-${cfg.googleAds.tagId}`] = flag;
+    }
+};
+
+export const ensureGaConfigured = () => {
+    if (gaConfigured || typeof window.gtag !== 'function') return;
+    window.gtag('config', GA_MEASUREMENT_ID);
+    gaConfigured = true;
+};
+
+export const trackPageView = (path = window.location.pathname) => {
+    const isAdmin = path.startsWith('/admin');
+    setGaDisabled(isAdmin);
+    if (isAdmin) {
+        return;
+    }
+
+    ensureGaConfigured();
+
     if (metaEnabled('PageView')) window.fbq('track', 'PageView');
-    if (loaded.gtag && window.gtag) window.gtag('event', 'page_view', { page_path: window.location.pathname });
+    if (typeof window.gtag === 'function') {
+        window.gtag('event', 'page_view', {
+            page_path: path,
+            page_location: window.location.href,
+            page_title: document.title,
+        });
+    }
 };
 
 export const trackViewContent = (product) => {

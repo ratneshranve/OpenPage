@@ -11,14 +11,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <title>OpenPage | Practical eBooks for modern work</title>
   <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-L2MSESDJN4"></script>
   <script>
+    var GA_ID = 'G-L2MSESDJN4';
+    var isAdminRoute = window.location.pathname.startsWith('/admin');
+    if (isAdminRoute) {
+      window['ga-disable-' + GA_ID] = true;
+    }
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
     gtag('js', new Date());
 
-    gtag('config', 'G-L2MSESDJN4');
+    if (!isAdminRoute) {
+      gtag('config', GA_ID);
+    }
   </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-L2MSESDJN4"></script>
   <!-- Meta Pixel Code -->
   <script>
     !function (f, b, e, v, n, t, s) {
@@ -33,7 +40,9 @@
     }(window, document, 'script',
       'https://connect.facebook.net/en_US/fbevents.js');
     fbq('init', '1483481040551645');
-    fbq('track', 'PageView');
+    if (!isAdminRoute) {
+      fbq('track', 'PageView');
+    }
   </script>
   <!-- End Meta Pixel Code -->
   <!--app-head-->
