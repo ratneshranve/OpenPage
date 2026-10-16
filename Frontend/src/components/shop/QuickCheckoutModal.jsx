@@ -346,14 +346,28 @@ export default function QuickCheckoutModal({ product, open, onClose, onSuccess }
 
                     {/* Tap to pay via UPI Intent on Mobile */}
                     {order?.manualUpi?.upiUri && (
-                        <div>
+                        <div className="space-y-1 sm:hidden">
                             <a
                                 href={order.manualUpi.upiUri}
+                                onClick={(e) => {
+                                    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+                                    const isDesktopPlatform = /Win32|Win64|Windows|MacIntel|Macintosh|Linux x86/i.test(navigator.platform || '');
+                                    if (!isMobile || isDesktopPlatform) {
+                                        e.preventDefault();
+                                        toast('UPI "Tap to Pay" requires an actual mobile phone with UPI apps (GPay / PhonePe / Paytm). On PC or DevTools, please scan the QR code above or copy the UPI ID below.', {
+                                            icon: '📱',
+                                            duration: 5500,
+                                        });
+                                    }
+                                }}
                                 className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white py-3.5 px-4 font-bold text-sm shadow-md hover:brightness-105 active:scale-[0.98] transition w-full"
                             >
                                 <Smartphone className="h-5 w-5" />
                                 <span>Tap to Pay in UPI App (GPay / PhonePe)</span>
                             </a>
+                            <p className="text-[11px] text-muted text-center">
+                                Tap to open Google Pay, PhonePe, or Paytm directly on your phone
+                            </p>
                         </div>
                     )}
 

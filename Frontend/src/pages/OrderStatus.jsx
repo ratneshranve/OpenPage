@@ -162,6 +162,17 @@ export default function OrderStatus() {
                                     <div className="max-w-md mx-auto sm:hidden">
                                         <a
                                             href={order.manualUpi.upiUri}
+                                            onClick={(e) => {
+                                                const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+                                                const isDesktopPlatform = /Win32|Win64|Windows|MacIntel|Macintosh|Linux x86/i.test(navigator.platform || '');
+                                                if (!isMobile || isDesktopPlatform) {
+                                                    e.preventDefault();
+                                                    toast('UPI "Open in UPI App" requires an actual mobile phone with UPI apps (GPay / PhonePe / Paytm). On PC or DevTools, please scan the QR code above or copy the UPI ID.', {
+                                                        icon: '📱',
+                                                        duration: 5500,
+                                                    });
+                                                }
+                                            }}
                                             className="flex items-center justify-center gap-2 rounded-lg bg-brand text-white py-3 px-4 font-semibold text-sm w-full shadow-sm"
                                         >
                                             <Smartphone className="h-4 w-4" /> Open in UPI App (GPay / PhonePe)

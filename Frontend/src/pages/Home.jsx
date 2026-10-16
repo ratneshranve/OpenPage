@@ -248,9 +248,11 @@ export default function Home() {
 
                         <div className="mt-6 flex flex-wrap gap-3">
                             {primaryBook && (
-                                <Button size="lg" className="hidden lg:inline-flex bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 font-extrabold text-white shadow-md hover:brightness-105" onClick={() => setQuickBuyProduct(primaryBook)}>
-                                    <Zap className="h-4 w-4 fill-yellow-300 text-yellow-300" /> Buy Now · {money(primaryBook.finalPrice, primaryBook.currency)}
-                                </Button>
+                                <div className="hidden lg:inline-flex">
+                                    <Button size="lg" className="bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 font-extrabold text-white shadow-md hover:brightness-105" onClick={() => setQuickBuyProduct(primaryBook)}>
+                                        <Zap className="h-4 w-4 fill-yellow-300 text-yellow-300" /> Buy Now · {money(primaryBook.finalPrice, primaryBook.currency)}
+                                    </Button>
+                                </div>
                             )}
                             {hero.primaryCtaText && (
                                 <Button as={Link} to={hero.primaryCtaLink || '/ebooks'} size="lg" variant={primaryBook ? 'outline' : 'primary'}>
