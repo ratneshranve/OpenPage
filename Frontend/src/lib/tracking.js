@@ -86,6 +86,12 @@ export const configureTracking = (trackingConfig, consentState) => {
     if (window.fbq && consent?.advertising) window.fbq('consent', 'grant');
 };
 
+const toAmount = (amountInPaise) => {
+    const num = Number(amountInPaise);
+    if (!Number.isFinite(num) || num <= 0) return 0;
+    return Number((num / 100).toFixed(2));
+};
+
 export const adsenseConfig = () => cfg?.adsense;
 
 const metaEnabled = (event) => (loaded.meta || Boolean(window.fbq)) && (cfg?.meta?.events?.[event] !== false) && typeof window.fbq === 'function';
@@ -96,7 +102,16 @@ export const trackPageView = () => {
 };
 
 export const trackViewContent = (product) => {
-    if (metaEnabled('ViewContent')) window.fbq('track', 'ViewContent', { content_ids: [product._id], content_name: product.title, content_type: 'product', value: product.finalPrice / 100, currency: product.currency });
+    if (!product || !metaEnabled('ViewContent')) return;
+    const value = toAmount(product.finalPrice || product.price);
+    const currency = String(product.currency || 'INR').toUpperCase();
+    window.fbq('track', 'ViewContent', {
+        content_ids: [String(product._id)],
+        content_name: product.title,
+        content_type: 'product',
+        value,
+        currency,
+    });
 };
 
 export const trackSearch = (q) => {
@@ -104,18 +119,46 @@ export const trackSearch = (q) => {
 };
 
 export const trackAddToCart = (product) => {
-    if (metaEnabled('AddToCart')) window.fbq('track', 'AddToCart', { content_ids: [product._id], content_name: product.title, content_type: 'product', value: product.finalPrice / 100, currency: product.currency });
+    if (!product || !metaEnabled('AddToCart')) return;
+    const value = toAmount(product.finalPrice || product.price);
+    const currency = String(product.currency || 'INR').toUpperCase();
+    window.fbq('track', 'AddToCart', {
+        content_ids: [String(product._id)],
+        content_name: product.title,
+        content_type: 'product',
+        value,
+        currency,
+    });
 };
 
 export const trackInitiateCheckout = (quote) => {
-    if (metaEnabled('InitiateCheckout')) window.fbq('track', 'InitiateCheckout', { content_ids: quote.items.map((i) => i.product), num_items: quote.items.length, value: quote.total / 100, currency: quote.currency });
-    if (loaded.gtag && cfg.googleAds.trackCheckout && cfg.googleAds.checkoutLabel && window.gtag) {
-        window.gtag('event', 'conversion', { send_to: `${cfg.googleAds.conversionId || cfg.googleAds.tagId}/${cfg.googleAds.checkoutLabel}`, value: quote.total / 100, currency: quote.currency });
+    if (!quote) return;
+    const value = toAmount(quote.total);
+    const currency = String(quote.currency || 'INR').toUpperCase();
+    const contentIds = (quote.items || []).map((i) => String(i.product || i.productId || '')).filter(Boolean);
+    const numItems = (quote.items || []).length || 1;
+
+    if (metaEnabled('InitiateCheckout')) {
+        window.fbq('track', 'InitiateCheckout', {
+            content_ids: contentIds,
+            content_type: 'product',
+            num_items: numItems,
+            value,
+            currency,
+        });
+    }
+    if (loaded.gtag && cfg?.googleAds?.trackCheckout && cfg?.googleAds?.checkoutLabel && window.gtag) {
+        window.gtag('event', 'conversion', {
+            send_to: `${cfg.googleAds.conversionId || cfg.googleAds.tagId}/${cfg.googleAds.checkoutLabel}`,
+            value,
+            currency,
+        });
     }
 };
 
 /** Fires once per order. Returns true if any tag received the event. */
 export const trackPurchase = (order) => {
+    if (!order) return false;
     const key = `op_tracked_${order.orderNumber}`;
     try {
         if (localStorage.getItem(key)) return false;
@@ -123,13 +166,29 @@ export const trackPurchase = (order) => {
         /* storage unavailable */
     }
     let sent = false;
+    const value = toAmount(order.total);
+    const currency = String(order.currency || 'INR').toUpperCase();
+    const contentIds = (order.items || []).map((i) => String(i.productId || i.product || '')).filter(Boolean);
+    const numItems = (order.items || []).length || 1;
+
     if (metaEnabled('Purchase')) {
         // eventID lets Meta deduplicate against any server-side events for the same order.
-        window.fbq('track', 'Purchase', { content_ids: order.items.map((i) => i.productId), content_type: 'product', value: order.total / 100, currency: order.currency, num_items: order.items.length }, { eventID: order.orderNumber });
+        window.fbq('track', 'Purchase', {
+            content_ids: contentIds,
+            content_type: 'product',
+            value,
+            currency,
+            num_items: numItems,
+        }, { eventID: String(order.orderNumber) });
         sent = true;
     }
-    if (loaded.gtag && cfg.googleAds.purchaseLabel && window.gtag) {
-        window.gtag('event', 'conversion', { send_to: `${cfg.googleAds.conversionId || cfg.googleAds.tagId}/${cfg.googleAds.purchaseLabel}`, value: order.total / 100, currency: order.currency, transaction_id: order.orderNumber });
+    if (loaded.gtag && cfg?.googleAds?.purchaseLabel && window.gtag) {
+        window.gtag('event', 'conversion', {
+            send_to: `${cfg.googleAds.conversionId || cfg.googleAds.tagId}/${cfg.googleAds.purchaseLabel}`,
+            value,
+            currency,
+            transaction_id: String(order.orderNumber),
+        });
         sent = true;
     }
     try {
