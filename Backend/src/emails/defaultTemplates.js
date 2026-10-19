@@ -205,12 +205,59 @@ ${btn('{{checkoutUrl}}', 'Complete my purchase')}
         name: 'Abandoned checkout: second reminder',
         category: 'marketing',
         subject: 'Your eBooks are waiting for you',
-        preheader: 'A final reminder about your saved cart.',
+        preheader: 'A quick reminder about your saved cart.',
         variables: ['items', 'checkoutUrl'],
         html: `<h1 style="font-size:20px;margin:0 0 12px;">A quick reminder</h1>
-<p>Your cart on {{siteName}} is still saved. This is our last reminder about it.</p>
+<p>Your cart on {{siteName}} is still saved. Don't miss out on your selected eBooks:</p>
 <ul>{{#each items}}<li>{{this.title}}</li>{{/each}}</ul>
-${btn('{{checkoutUrl}}', 'Return to checkout')}`,
+${btn('{{checkoutUrl}}', 'Return to checkout')}
+<p style="font-size:13px;color:#5b6b86;">Prices are confirmed at checkout. If you already completed your purchase, please ignore this email.</p>`,
+    },
+    {
+        key: 'abandoned_checkout_3',
+        name: 'Abandoned checkout: special offer (10% off)',
+        category: 'marketing',
+        subject: 'Special 10% discount to complete your eBook order!',
+        preheader: 'Use code {{couponCode}} or click below to claim your 10% discount.',
+        variables: ['items', 'checkoutUrl', 'couponCode', 'discountPercent'],
+        html: `<h1 style="font-size:20px;margin:0 0 12px;">Here is an exclusive 10% discount!</h1>
+<p>We noticed you haven't completed your order on {{siteName}}. To make it even easier to start reading, we've applied a special discount for you:</p>
+<div style="background:#f0fdf4;border:1px dashed #16a34a;border-radius:10px;padding:16px;margin:18px 0;text-align:center;">
+<p style="margin:0 0 6px;font-size:13px;color:#166534;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Your Exclusive Discount Code</p>
+<p style="margin:0;font-size:28px;font-weight:800;letter-spacing:4px;color:#15803d;">{{couponCode}}</p>
+<p style="margin:6px 0 0;font-size:13px;color:#166534;">Get {{discountPercent}} off your total at checkout</p>
+</div>
+<p>Your saved selection:</p>
+<ul>{{#each items}}<li>{{this.title}}</li>{{/each}}</ul>
+${btn('{{checkoutUrl}}', 'Claim 10% Off & Complete Purchase')}
+<p style="font-size:13px;color:#5b6b86;">This discount will be applied automatically when you click the button above.</p>`,
+    },
+    {
+        key: 'abandoned_checkout_4',
+        name: 'Abandoned checkout: urgency reminder',
+        category: 'marketing',
+        subject: 'Your 10% discount code is expiring soon',
+        preheader: 'Final reminder to claim your 10% discount.',
+        variables: ['items', 'checkoutUrl', 'couponCode', 'discountPercent'],
+        html: `<h1 style="font-size:20px;margin:0 0 12px;">Don't let your 10% discount expire</h1>
+<p>This is a quick reminder that your exclusive discount code <strong>{{couponCode}}</strong> is still waiting for you on {{siteName}}.</p>
+<p>Your saved eBooks:</p>
+<ul>{{#each items}}<li>{{this.title}}</li>{{/each}}</ul>
+${btn('{{checkoutUrl}}', 'Complete My Order with 10% Off')}
+<p style="font-size:13px;color:#5b6b86;">Prices and discounts are confirmed at checkout. Complete your purchase now to secure this rate.</p>`,
+    },
+    {
+        key: 'abandoned_checkout_recurring',
+        name: 'Abandoned checkout: ongoing reminder',
+        category: 'marketing',
+        subject: 'Your saved cart on {{siteName}} is still available',
+        preheader: 'Your eBooks and 10% discount are still waiting for you.',
+        variables: ['items', 'checkoutUrl', 'couponCode'],
+        html: `<h1 style="font-size:20px;margin:0 0 12px;">Still thinking about your eBooks?</h1>
+<p>Your cart is still saved and your exclusive discount code <strong>{{couponCode}}</strong> is ready whenever you want to dive in.</p>
+<ul>{{#each items}}<li>{{this.title}}</li>{{/each}}</ul>
+${btn('{{checkoutUrl}}', 'Resume My Purchase')}
+<p style="font-size:13px;color:#5b6b86;">If you have already completed your purchase or no longer wish to buy, you can safely ignore this email.</p>`,
     },
     {
         key: 'post_purchase_getting_started',

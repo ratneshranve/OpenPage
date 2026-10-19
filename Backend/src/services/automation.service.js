@@ -25,16 +25,28 @@ const hasMarketingConsent = async (email, extra = false) => {
 const runAbandoned = async (automation, run) => {
     const now = Date.now();
     const delayMs = automation.delayMinutes * 60000;
+    const lookback = (automation.lookbackHours || 720) * 3600000;
     const filter = {
         emailVerifiedAt: { $ne: null },
         status: { $in: ['active', 'payment_pending'] },
-        remindersSent: automation.step - 1,
-        lastActivityAt: { $gte: new Date(now - automation.lookbackHours * 3600000) },
+        lastActivityAt: { $gte: new Date(now - lookback) },
     };
-    // Step 1 waits from the customer's last activity; later steps wait from the previous reminder.
-    if (automation.step === 1) filter.lastActivityAt.$lte = new Date(now - delayMs);
-    else filter.lastReminderAt = { $lte: new Date(now - delayMs) };
-    if (automation.conditions?.requireMarketingConsent) filter.marketingConsent = true;
+
+    if (automation.isRecurring) {
+        // Recurring reminder: for sessions that completed initial steps, continue periodically until purchase
+        filter.remindersSent = { $gte: automation.step - 1, $lt: 25 };
+        filter.lastReminderAt = { $lte: new Date(now - delayMs) };
+    } else {
+        filter.remindersSent = automation.step - 1;
+        // Step 1 waits from customer's last activity; later steps wait from previous reminder
+        if (automation.step === 1) filter.lastActivityAt.$lte = new Date(now - delayMs);
+        else filter.lastReminderAt = { $lte: new Date(now - delayMs) };
+    }
+
+    // Do NOT require marketing consent for abandoned checkout recovery
+    if (automation.conditions?.requireMarketingConsent && automation.trigger !== 'checkout_abandoned') {
+        filter.marketingConsent = true;
+    }
     if (automation.audience === 'registered_only') filter.user = { $ne: null };
     if (automation.audience === 'guests_only') filter.user = null;
 
@@ -42,18 +54,35 @@ const runAbandoned = async (automation, run) => {
     run.candidates = sessions.length;
     for (const s of sessions) {
         const email = s.email;
-        const skip =
-            (await Suppression.exists({ email })) ||
-            (await Order.exists({ email, status: { $in: ['paid', 'partially_refunded'] }, paidAt: { $gte: s.createdAt } })) ||
-            (automation.conditions?.minOrderValue && (s.cartSnapshot?.total || 0) < automation.conditions.minOrderValue) ||
-            (await alreadySent(automation, email)) ||
-            (await recentlyEmailed(email, automation.frequencyCapHours));
-        if (skip) {
-            run.skipped += 1;
-            // Advance the step so a skipped session is not re-evaluated forever.
-            await CheckoutSession.updateOne({ _id: s._id }, { $set: { remindersSent: automation.step, lastReminderAt: new Date() } });
+
+        // Check if customer already purchased or paid
+        const hasPurchased = await Order.exists({
+            email,
+            status: { $in: ['paid', 'partially_refunded'] },
+            $or: [{ paidAt: { $gte: s.createdAt } }, { status: 'paid' }],
+        });
+
+        if (hasPurchased) {
+            // Customer purchased: convert session and stop further recovery emails
+            await CheckoutSession.updateOne({ _id: s._id }, { $set: { status: 'converted' } });
             continue;
         }
+
+        const skip =
+            (await Suppression.exists({ email })) ||
+            (automation.conditions?.minOrderValue && (s.cartSnapshot?.total || 0) < automation.conditions.minOrderValue) ||
+            (!automation.isRecurring && (await alreadySent(automation, email))) ||
+            (await recentlyEmailed(email, automation.frequencyCapHours));
+
+        if (skip) {
+            run.skipped += 1;
+            if (!automation.isRecurring) {
+                await CheckoutSession.updateOne({ _id: s._id }, { $set: { remindersSent: automation.step, lastReminderAt: new Date() } });
+            }
+            continue;
+        }
+
+        const nextReminderCount = (s.remindersSent || 0) + 1;
         await queueEmail({
             to: email,
             templateKey: automation.templateKey,
@@ -61,9 +90,10 @@ const runAbandoned = async (automation, run) => {
             automation: automation._id,
             checkoutSession: s._id,
             data: { sessionId: String(s._id) },
-            dedupeKey: `auto:${automation.key}:${s._id}`,
+            dedupeKey: `auto:${automation.key}:${s._id}:${nextReminderCount}`,
         });
-        await CheckoutSession.updateOne({ _id: s._id }, { $set: { remindersSent: automation.step, lastReminderAt: new Date() } });
+
+        await CheckoutSession.updateOne({ _id: s._id }, { $set: { remindersSent: nextReminderCount, lastReminderAt: new Date() } });
         await Automation.updateOne({ _id: automation._id }, { $inc: { 'stats.queued': 1 } });
         run.queued += 1;
     }

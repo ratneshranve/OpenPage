@@ -47,7 +47,11 @@ const actionLink = async (userId, purpose, ttlMinutes, path) => {
     return `${config.frontendUrl}${path}?token=${token}`;
 };
 
-export const checkoutResumeUrl = (sessionId) => `${config.frontendUrl}/checkout/resume?sid=${sessionId}&sig=${hmac(config.sessionSecret, `resume:${sessionId}`).slice(0, 32)}`;
+export const checkoutResumeUrl = (sessionId, couponCode) => {
+    let url = `${config.frontendUrl}/checkout/resume?sid=${sessionId}&sig=${hmac(config.sessionSecret, `resume:${sessionId}`).slice(0, 32)}`;
+    if (couponCode) url += `&coupon=${encodeURIComponent(couponCode)}`;
+    return url;
+};
 
 const builders = {
     order_delivery: (msg) => deliveryContext(msg, 'email'),
@@ -79,7 +83,15 @@ const builders = {
         if (paid) return { skip: 'customer purchased' };
         const items = session.items.filter((i) => i.product?.status === 'published').map((i) => ({ title: i.product.title }));
         if (!items.length) return { skip: 'products no longer available' };
-        return { items, checkoutUrl: checkoutResumeUrl(session._id), totalFormatted: session.cartSnapshot?.total ? formatMoney(session.cartSnapshot.total) : '' };
+        const couponCode = msg.data?.couponCode || (['abandoned_checkout_3', 'abandoned_checkout_4', 'abandoned_checkout_recurring'].includes(msg.templateKey) ? 'SPECIAL10' : null);
+        return {
+            items,
+            titles: items.map((i) => i.title).join(', '),
+            couponCode: couponCode || '',
+            discountPercent: couponCode ? '10%' : '',
+            checkoutUrl: checkoutResumeUrl(session._id, couponCode),
+            totalFormatted: session.cartSnapshot?.total ? formatMoney(session.cartSnapshot.total) : '',
+        };
     },
     post_purchase: async (msg) => {
         const order = await Order.findById(msg.order || msg.data?.orderId).lean();

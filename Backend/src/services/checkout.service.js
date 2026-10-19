@@ -92,13 +92,22 @@ export const getSessionView = (session) => sessionView(session);
 export const quoteForSession = async (session, couponCode) =>
     priceCart({ productIds: session.items.map((i) => String(i.product)), couponCode: couponCode ?? session.couponCode, email: isVerified(session) ? session.email : null });
 
-/** Rebuilds a checkout from a signed reminder link. The email must be verified again. */
-export const resumeSession = async ({ sid, sig, ip }) => {
+/** Rebuilds a checkout from a signed reminder link. */
+export const resumeSession = async ({ sid, sig, couponCode, ip }) => {
     const expected = hmac(config.sessionSecret, `resume:${sid}`).slice(0, 32);
     if (!mongoose.isValidObjectId(sid) || !safeEqual(expected, String(sig || ''))) throw ApiError.badRequest('This checkout link is not valid.');
     const old = await CheckoutSession.findById(sid).lean();
     if (!old) throw ApiError.notFound('This checkout has expired. Please browse the catalogue to start again.');
-    const created = await createSession({ productIds: old.items.map((i) => String(i.product)), couponCode: old.couponCode, attribution: { source: 'email', medium: 'reminder', campaign: 'abandoned_checkout' }, ip });
+    const effectiveCoupon = couponCode || old.couponCode;
+    const created = await createSession({ productIds: old.items.map((i) => String(i.product)), couponCode: effectiveCoupon, attribution: { source: 'email', medium: 'reminder', campaign: 'abandoned_checkout' }, ip });
+    if (old.email) {
+        await CheckoutSession.updateOne(
+            { tokenHash: sha256(created.sessionToken) },
+            { $set: { email: old.email, customerName: old.customerName || '', customerPhone: old.customerPhone || '' } }
+        );
+        created.suggestedEmail = old.email;
+        created.quote = await quoteForSession(await findSession(created.sessionToken));
+    }
     return { ...created, suggestedEmail: old.email, productIds: old.items.map((i) => String(i.product)) };
 };
 

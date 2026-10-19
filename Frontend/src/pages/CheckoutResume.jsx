@@ -16,7 +16,8 @@ export default function CheckoutResume() {
     useEffect(() => {
         (async () => {
             try {
-                const r = (await api.post('/checkout/sessions/resume', { sid: params.get('sid'), sig: params.get('sig') })).data.data;
+                const couponCode = params.get('coupon') || undefined;
+                const r = (await api.post('/checkout/sessions/resume', { sid: params.get('sid'), sig: params.get('sig'), couponCode })).data.data;
                 setSessionToken(r.sessionToken);
                 const items = r.quote.items.map((i) => ({ id: String(i.product), title: i.title, slug: i.slug, coverImage: i.coverImage, price: i.total, currency: r.quote.currency }));
                 replace(items);
