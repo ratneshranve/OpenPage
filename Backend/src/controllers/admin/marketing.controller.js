@@ -184,6 +184,36 @@ export const listEmailLogs = asyncHandler(async (req, res) => {
     ok(res, { ...paginated(items, total, { page, limit }), last7Days: Object.fromEntries(counts.map((c) => [c._id, c.n])) });
 });
 
+export const previewEmailLog = asyncHandler(async (req, res) => {
+    const msg = await EmailMessage.findById(req.params.id).populate('order').lean();
+    if (!msg) throw ApiError.notFound('Email log not found');
+    let subject = msg.subject;
+    let html = msg.bodyHtml;
+    let text = msg.bodyText;
+
+    if (!html && msg.templateKey) {
+        try {
+            const { getTemplate, renderEmail } = await import('../../services/email.service.js');
+            const template = await getTemplate(msg.templateKey);
+            if (template) {
+                const { buildEmailContext } = await import('../../services/emailContext.service.js');
+                const dynamic = await buildEmailContext(msg);
+                const { __template, ...dynamicData } = dynamic || {};
+                const data = { ...(msg.data || {}), ...dynamicData };
+                const tpl = { ...template, ...(msg.subject ? { subject: msg.subject } : {}), ...(__template || {}) };
+                const rendered = await renderEmail({ template: tpl, to: msg.to, data, category: msg.category });
+                subject = subject || rendered.subject;
+                html = rendered.html;
+                text = rendered.text;
+            }
+        } catch {
+            // fallback if context cannot be fully rebuilt
+        }
+    }
+
+    ok(res, { subject, html, text });
+});
+
 export const retryEmail = asyncHandler(async (req, res) => {
     const msg = await EmailMessage.findOneAndUpdate({ _id: req.params.id, status: { $in: ['failed', 'cancelled'] }, sensitive: { $ne: true } }, { $set: { status: 'queued', nextAttemptAt: new Date(), maxAttempts: 3, attempts: 0 } }, { new: true });
     if (!msg) throw ApiError.badRequest('Only failed or cancelled emails can be retried. OTP emails cannot be re-sent from here.');

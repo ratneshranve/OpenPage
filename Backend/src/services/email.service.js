@@ -203,7 +203,16 @@ export const sendNow = async ({ to, templateKey, data = {}, type, checkoutSessio
         const info = await transmit({ to, ...rendered });
         await EmailMessage.updateOne(
             { _id: log._id },
-            { $set: { status: 'sent', sentAt: new Date(), subject: rendered.subject.replace(/\b\d{6}\b/g, '••••••'), providerMessageId: info.messageId, providerResponse: info.response?.slice?.(0, 300) } }
+            {
+                $set: {
+                    status: 'sent',
+                    sentAt: new Date(),
+                    subject: rendered.subject.replace(/\b\d{6}\b/g, '••••••'),
+                    providerMessageId: info.messageId,
+                    providerResponse: info.response?.slice?.(0, 300),
+                    ...(templateKey === 'otp_verification' ? {} : { bodyHtml: rendered.html, bodyText: rendered.text }),
+                },
+            }
         );
         return { ok: true };
     } catch (err) {
@@ -265,7 +274,7 @@ const deliver = async (msg) => {
     const tpl = { ...template, ...(msg.subject ? { subject: msg.subject } : {}), ...(__template || {}) };
     const rendered = await renderEmail({ template: tpl, to: msg.to, data, category: msg.category });
     const info = await transmit({ to: msg.to, ...rendered });
-    return { info, subject: rendered.subject };
+    return { info, subject: rendered.subject, html: rendered.html, text: rendered.text };
 };
 
 let workerBusy = false;
@@ -294,7 +303,16 @@ export const processEmailQueue = async (batch = 20) => {
                 } else {
                     await EmailMessage.updateOne(
                         { _id: msg._id },
-                        { $set: { status: 'sent', sentAt: new Date(), subject: result.subject, providerMessageId: result.info?.messageId, providerResponse: String(result.info?.response || '').slice(0, 300) } }
+                        {
+                            $set: {
+                                status: 'sent',
+                                sentAt: new Date(),
+                                subject: result.subject,
+                                providerMessageId: result.info?.messageId,
+                                providerResponse: String(result.info?.response || '').slice(0, 300),
+                                ...(msg.sensitive ? {} : { bodyHtml: result.html, bodyText: result.text }),
+                            },
+                        }
                     );
                 }
                 await afterSend(msg, result.skipped || result.suppressed ? null : 'sent');

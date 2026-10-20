@@ -161,6 +161,7 @@ router.post('/email-templates/:key/preview', validate(z.object({ subject: z.stri
 router.post('/email/test', validate(z.object({ to: z.string().email().optional(), templateKey: z.string().max(60).optional() })), marketing.sendTestEmail);
 router.get('/email/smtp-status', marketing.smtpStatus);
 router.get('/email-logs', marketing.listEmailLogs);
+router.get('/email-logs/:id/preview', marketing.previewEmailLog);
 router.post('/email-logs/:id/retry', marketing.retryEmail);
 router.post('/email-logs/:id/cancel', marketing.cancelEmail);
 

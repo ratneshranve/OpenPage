@@ -30,6 +30,8 @@ const emailMessageSchema = new mongoose.Schema(
         category: { type: String, enum: ['transactional', 'marketing'], required: true },
         type: { type: String, index: true },
         subject: String,
+        bodyHtml: String,
+        bodyText: String,
         data: { type: Mixed, select: false },
         // Sensitive payloads (e.g. OTP codes, download links) are wiped after sending.
         sensitive: { type: Boolean, default: false },

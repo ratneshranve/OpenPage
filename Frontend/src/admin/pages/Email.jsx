@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Eye, Play, Plus, RotateCcw, Save, Send, Server } from 'lucide-react';
-import { Alert, Badge, Button, Input, Modal, PageLoader, Select, StatusBadge, Textarea, Toggle } from '../../components/ui';
+import { Alert, Badge, Button, Input, Modal, PageLoader, Select, StatusBadge, Textarea, Toggle, cn } from '../../components/ui';
 import { DataTable, FilterSelect, KeyValue, PageHeader, Panel, SearchInput, fromLocalInput, toLocalInput, useAction, useAdminData } from '../components/kit';
 import { api, post, errorMessage } from '../../lib/api';
 import { dateTime, money } from '../../lib/format';
@@ -187,20 +187,132 @@ function Logs() {
                 ) },
             ]} />
             {detail && (
-                <Modal open onClose={() => setDetail(null)} title="Email details" size="lg">
-                    <KeyValue items={[
-                        ['Recipient', detail.to], ['Type', detail.type], ['Template', detail.templateKey], ['Category', detail.category], ['Status', <StatusBadge key="s" status={detail.status} />],
-                        ['Attempts', `${detail.attempts}/${detail.maxAttempts}`], ['Next attempt', dateTime(detail.nextAttemptAt)], ['Sent', dateTime(detail.sentAt)], ['Provider message ID', detail.providerMessageId], ['Provider response', detail.providerResponse],
-                    ]} />
-                    {detail.errors?.length > 0 && (
-                        <div className="mt-4">
-                            <p className="text-sm font-semibold">Errors</p>
-                            <ul className="mt-1 space-y-1 text-xs">{detail.errors.map((e, i) => <li key={i} className="rounded bg-danger-pale p-2">{dateTime(e.at)} · {e.message}</li>)}</ul>
-                        </div>
-                    )}
-                </Modal>
+                <EmailDetailModal detail={detail} onClose={() => setDetail(null)} />
             )}
         </div>
+    );
+}
+
+function EmailDetailModal({ detail, onClose }) {
+    const [preview, setPreview] = useState({
+        loading: !detail.bodyHtml && !detail.bodyText,
+        html: detail.bodyHtml || '',
+        text: detail.bodyText || '',
+        subject: detail.subject || '',
+    });
+    const [tab, setTab] = useState('html');
+
+    useEffect(() => {
+        if (!detail?._id) return;
+        if (detail.bodyHtml || detail.bodyText) {
+            setPreview({
+                loading: false,
+                html: detail.bodyHtml || '',
+                text: detail.bodyText || '',
+                subject: detail.subject || '',
+            });
+            return;
+        }
+
+        api.get(`/admin/email-logs/${detail._id}/preview`)
+            .then((r) => {
+                setPreview({
+                    loading: false,
+                    html: r.data.data?.html || '',
+                    text: r.data.data?.text || '',
+                    subject: r.data.data?.subject || detail.subject || '',
+                });
+            })
+            .catch(() => {
+                setPreview((p) => ({ ...p, loading: false }));
+            });
+    }, [detail]);
+
+    return (
+        <Modal open onClose={onClose} title="Email details & Message" size="xl">
+            <div className="space-y-6">
+                <div>
+                    <h3 className="mb-2 text-sm font-semibold text-ink">Delivery Information</h3>
+                    <KeyValue
+                        items={[
+                            ['Recipient', detail.to],
+                            ['Subject', preview.subject || detail.subject || '—'],
+                            ['Type', detail.type],
+                            ['Template', detail.templateKey],
+                            ['Category', detail.category],
+                            ['Status', <StatusBadge key="s" status={detail.status} />],
+                            ['Order', detail.order ? (detail.order.orderNumber || detail.order) : '—'],
+                            ['Sent', dateTime(detail.sentAt)],
+                            ['Attempts', `${detail.attempts}/${detail.maxAttempts}`],
+                            ['Provider Message ID', detail.providerMessageId || '—'],
+                        ]}
+                    />
+                </div>
+
+                <div className="rounded-xl border border-line bg-surface/50 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                        <div className="min-w-0">
+                            <h3 className="text-sm font-semibold text-ink">Message Content Sent</h3>
+                            <p className="truncate text-xs text-muted">
+                                {preview.subject ? `Subject: ${preview.subject}` : 'Rendered preview of the message sent to customer'}
+                            </p>
+                        </div>
+                        <div className="flex rounded-lg border border-line bg-white p-0.5 text-xs font-medium">
+                            <button
+                                type="button"
+                                onClick={() => setTab('html')}
+                                className={cn('rounded-md px-3 py-1 transition cursor-pointer', tab === 'html' ? 'bg-brand text-white shadow-xs' : 'text-muted hover:text-ink')}
+                            >
+                                HTML Preview
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setTab('text')}
+                                className={cn('rounded-md px-3 py-1 transition cursor-pointer', tab === 'text' ? 'bg-brand text-white shadow-xs' : 'text-muted hover:text-ink')}
+                            >
+                                Plain Text
+                            </button>
+                        </div>
+                    </div>
+
+                    {preview.loading ? (
+                        <div className="flex h-48 items-center justify-center rounded-lg border border-line bg-white text-sm text-muted">
+                            Loading message preview…
+                        </div>
+                    ) : tab === 'html' ? (
+                        preview.html ? (
+                            <iframe
+                                title="Email Preview"
+                                srcDoc={preview.html}
+                                className="h-96 w-full rounded-lg border border-line bg-white shadow-inner"
+                                sandbox="allow-same-origin allow-popups"
+                            />
+                        ) : (
+                            <div className="flex h-32 items-center justify-center rounded-lg border border-line bg-white text-xs text-muted">
+                                No visual preview available for this email log.
+                            </div>
+                        )
+                    ) : (
+                        <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border border-line bg-white p-4 font-mono text-xs text-ink leading-relaxed">
+                            {preview.text || preview.html?.replace(/<[^>]+>/g, '') || 'No plain text content available.'}
+                        </pre>
+                    )}
+                </div>
+
+                {detail.errors?.length > 0 && (
+                    <div className="mt-4">
+                        <p className="text-sm font-semibold text-danger">Errors</p>
+                        <ul className="mt-1 space-y-1 text-xs">
+                            {detail.errors.map((e, i) => (
+                                <li key={i} className="rounded-lg bg-danger-pale p-2 text-danger">
+                                    {dateTime(e.at)} · {e.message}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        </Modal>
     );
 }
 
