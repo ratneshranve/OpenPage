@@ -1,6 +1,6 @@
 import { ApiError } from '../utils/ApiError.js';
 import { randomToken, safeEqual } from '../utils/helpers.js';
-import { CSRF_COOKIE, cookieBase } from './auth.js';
+import { CSRF_COOKIE, ACCESS_COOKIE, REFRESH_COOKIE, cookieBase } from './auth.js';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -21,6 +21,29 @@ export const issueCsrfToken = (req, res) => {
 
 export const csrfProtection = (req, _res, next) => {
     if (SAFE_METHODS.has(req.method)) return next();
+
+    const path = req.path || '';
+
+    // Public storefront endpoints (checkout, orders, payments, forms) do not rely on 
+    // authentication cookies and should never fail due to cross-site cookie restrictions 
+    // or strict browser tracking protection (e.g. mobile in-app webviews, Safari, Chrome).
+    if (
+        path.startsWith('/checkout') ||
+        path.startsWith('/payments') ||
+        path.startsWith('/contact') ||
+        path.startsWith('/engagement') ||
+        path.startsWith('/newsletter') ||
+        path.startsWith('/webhooks')
+    ) {
+        return next();
+    }
+
+    // CSRF protection is only necessary for authenticated cookie sessions (Admin or user dashboard)
+    const hasAuthCookie = Boolean(req.cookies?.[ACCESS_COOKIE] || req.cookies?.[REFRESH_COOKIE]);
+    if (!hasAuthCookie && !req.cookies?.[CSRF_COOKIE]) {
+        return next();
+    }
+
     const cookieToken = req.cookies?.[CSRF_COOKIE];
     const headerToken = req.get('x-csrf-token');
     if (!cookieToken || !headerToken || !safeEqual(cookieToken, headerToken)) {

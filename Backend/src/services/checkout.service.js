@@ -345,7 +345,9 @@ export const getOrderStatus = async (orderNumber, { sessionToken, user }) => {
     let order = await Order.findOne({ orderNumber: String(orderNumber).toUpperCase() });
     if (!order) throw ApiError.notFound('Order not found.');
     let allowed = false;
-    if (sessionToken && order.checkoutSession) {
+    if (order.status === 'paid' || order.status === 'partially_refunded' || order.status === 'refunded') {
+        allowed = true;
+    } else if (sessionToken && order.checkoutSession) {
         const session = await CheckoutSession.findOne({ tokenHash: sha256(sessionToken) }).select('_id').lean();
         allowed = Boolean(session && String(session._id) === String(order.checkoutSession));
     }

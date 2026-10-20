@@ -17,9 +17,10 @@ const fetchCsrf = async () => {
         csrfPromise = axios
             .get(`${baseURL}/auth/csrf`, { withCredentials: true })
             .then((r) => {
-                csrfToken = r.data.data.csrfToken;
+                csrfToken = r.data?.data?.csrfToken || null;
                 return csrfToken;
             })
+            .catch(() => null)
             .finally(() => {
                 csrfPromise = null;
             });
@@ -30,8 +31,16 @@ const fetchCsrf = async () => {
 api.interceptors.request.use(async (config) => {
     const method = (config.method || 'get').toUpperCase();
     if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-        if (!csrfToken) await fetchCsrf();
-        config.headers['X-CSRF-Token'] = csrfToken;
+        if (!csrfToken) {
+            try {
+                await fetchCsrf();
+            } catch {
+                // Ignore CSRF fetch failures; public endpoints operate without cookies
+            }
+        }
+        if (csrfToken) {
+            config.headers['X-CSRF-Token'] = csrfToken;
+        }
     }
     const session = localStorage.getItem('op_checkout_session');
     if (session && config.url?.startsWith('/checkout')) config.headers['X-Checkout-Session'] = session;
@@ -49,7 +58,10 @@ api.interceptors.response.use(
         if (response.status === 403 && response.data?.code === 'CSRF' && !config._csrfRetry) {
             config._csrfRetry = true;
             csrfToken = null;
-            await fetchCsrf();
+            const freshToken = await fetchCsrf();
+            if (freshToken) {
+                config.headers['X-CSRF-Token'] = freshToken;
+            }
             return api(config);
         }
         if (response.status === 401 && !config._retried && !NO_REFRESH.some((p) => config.url?.startsWith(p))) {
