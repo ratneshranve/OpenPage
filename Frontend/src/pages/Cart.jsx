@@ -83,7 +83,7 @@ export default function Cart() {
             <p className="mt-1 text-sm text-muted">Digital products. No shipping required: you receive a secure download link by email.</p>
             {error && <Alert tone="error" className="mt-6" title="Could not update your cart">{error}</Alert>}
             <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]">
-                <div className="card p-5">
+                <div className="card p-5 min-w-0">
                     {loading && !quote ? (
                         <div className="space-y-4">
                             {ids.map((id) => <Skeleton key={id} className="h-16" />)}
@@ -92,7 +92,7 @@ export default function Cart() {
                         <OrderSummary quote={quote} onRemove={(id) => remove(id)} />
                     )}
                 </div>
-                <aside className="space-y-4">
+                <aside className="space-y-4 min-w-0">
                     <div className="card space-y-4 p-5">
                         <h2 className="font-semibold">Have a coupon?</h2>
                         <CouponForm applied={coupon && quote?.coupon?.valid ? coupon : ''} coupon={quote?.coupon} onApply={applyCoupon} onRemove={removeCoupon} loading={couponLoading} />

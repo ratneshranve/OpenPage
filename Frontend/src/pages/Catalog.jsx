@@ -150,10 +150,10 @@ export default function Catalog() {
                 </div>
             )}
             <div className="mt-8 grid gap-8 lg:grid-cols-[220px_1fr]">
-                <aside className={`${filtersOpen ? 'block' : 'hidden'} rounded-2xl border border-line p-4 lg:block lg:border-0 lg:p-0`} aria-label="Filters">
+                <aside className={`${filtersOpen ? 'block' : 'hidden'} rounded-2xl border border-line p-4 lg:block lg:border-0 lg:p-0 min-w-0`} aria-label="Filters">
                     {filters}
                 </aside>
-                <div>
+                <div className="min-w-0">
                     {error && <Alert tone="error" title="Could not load eBooks">{error}</Alert>}
                     {!error && !loading && data?.items.length === 0 ? (
                         <EmptyState icon={SearchX} title="No eBooks found" action={<Button variant="outline" onClick={() => setParams({})}>Clear filters</Button>}>

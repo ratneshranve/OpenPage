@@ -10,12 +10,12 @@ export const Logo = ({ className }) => {
     const { config } = useConfig();
     const logo = config?.general?.logoUrl;
     return (
-        <Link to="/" className={cn('flex items-center gap-2 text-xl font-extrabold tracking-tight text-ink no-underline hover:text-ink', className)} aria-label={`${config?.general?.siteName || 'OpenPage'} home`}>
+        <Link to="/" className={cn('flex items-center gap-2 text-xl font-extrabold tracking-tight text-ink no-underline hover:text-ink shrink-0', className)} aria-label={`${config?.general?.siteName || 'OpenPage'} home`}>
             {logo ? (
                 <img src={logo} alt="" className="h-8 w-auto" />
             ) : (
                 <>
-                    <svg viewBox="0 0 64 64" className="h-8 w-8" aria-hidden>
+                    <svg viewBox="0 0 64 64" className="h-8 w-8 shrink-0" aria-hidden>
                         <path d="M12 16c8-2 14 0 20 4v30c-6-4-12-6-20-4z" fill="#16a34a" />
                         <path d="M52 16c-8-2-14 0-20 4v30c6-4 12-6 20-4z" fill="#2563eb" />
                     </svg>
@@ -42,7 +42,7 @@ function SearchBox({ onDone, className }) {
     return (
         <form
             role="search"
-            className={cn('relative', className)}
+            className={cn('relative w-full', className)}
             onSubmit={(e) => {
                 e.preventDefault();
                 navigate(q.trim() ? `/ebooks?q=${encodeURIComponent(q.trim())}` : '/ebooks');
@@ -53,7 +53,7 @@ function SearchBox({ onDone, className }) {
                 Search eBooks
             </label>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
-            <input id="site-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search eBooks, topics, authors…" className="input h-10 rounded-full pl-9 text-sm" />
+            <input id="site-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search eBooks, topics, authors…" className="input h-10 w-full rounded-full pl-9 text-sm" />
         </form>
     );
 }
@@ -71,7 +71,7 @@ export default function Header() {
             <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2">
                 Skip to content
             </a>
-            <div className="container-page flex h-16 items-center gap-4">
+            <div className="container-page flex h-16 items-center gap-2 sm:gap-4">
                 <Logo />
                 <nav className="ml-4 hidden items-center gap-1 md:flex" aria-label="Main">
                     {NAV.map((n) => (
@@ -81,8 +81,8 @@ export default function Header() {
                     ))}
                 </nav>
                 <SearchBox className="ml-auto hidden w-full max-w-xs lg:block" />
-                <div className="ml-auto flex items-center gap-1 lg:ml-2">
-                    <Link to={user ? '/account' : '/login'} className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-soft no-underline hover:bg-surface hover:text-ink" aria-label={user ? 'My account' : 'Sign in'}>
+                <div className="ml-auto flex items-center gap-0.5 sm:gap-1.5 lg:ml-2 shrink-0">
+                    <Link to={user ? '/account' : '/login'} className="flex items-center gap-1.5 rounded-lg px-2 sm:px-3 py-2 text-sm font-medium text-ink-soft no-underline hover:bg-surface hover:text-ink" aria-label={user ? 'My account' : 'Sign in'}>
                         <User className="h-5 w-5" />
                         <span className="hidden sm:inline">{user ? 'Account' : 'Sign in'}</span>
                     </Link>

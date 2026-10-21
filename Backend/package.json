@@ -9,8 +9,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "start": "node api.js && node server.js",
-    "dev": "node api.js && node --watch server.js",
+    "start": "node init && node server.js",
+    "dev": "node init && node --watch server.js",
     "seed": "node src/scripts/seed.js",
     "seed:break": "node src/scripts/seedEbookBreak.js",
     "create-admin": "node src/scripts/createAdmin.js",
