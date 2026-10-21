@@ -12,6 +12,7 @@
     "start": "node api.js && node server.js",
     "dev": "node api.js && node --watch server.js",
     "seed": "node src/scripts/seed.js",
+    "seed:break": "node src/scripts/seedEbookBreak.js",
     "create-admin": "node src/scripts/createAdmin.js",
     "clean:orders": "node src/scripts/deleteOrders.js",
     "check": "node src/scripts/checkSyntax.js"

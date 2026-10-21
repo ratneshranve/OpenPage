@@ -139,6 +139,34 @@ export default function Home() {
                         {/* Mobile Instant Book Showcase Card: visible immediately on mobile without scrolling */}
                         {primaryBook && (
                             <div className="block lg:hidden my-6">
+                                {/* Book Switcher Tabs for Mobile */}
+                                {uniqueProducts.length > 1 && (
+                                    <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-none">
+                                        {uniqueProducts.map((p, idx) => {
+                                            const isSelected = selectedBookIndex === idx;
+                                            return (
+                                                <button
+                                                    key={p._id}
+                                                    type="button"
+                                                    onClick={() => setSelectedBookIndex(idx)}
+                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                                                        isSelected
+                                                            ? 'bg-brand text-white shadow-md ring-2 ring-brand/30'
+                                                            : 'bg-white text-ink-soft border border-line hover:border-brand/40 shadow-xs'
+                                                    }`}
+                                                >
+                                                    <span className="truncate max-w-[150px]">{p.title}</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
+                                                        isSelected ? 'bg-white/20 text-yellow-200' : 'bg-brand/10 text-brand'
+                                                    }`}>
+                                                        {money(p.finalPrice, p.currency)}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
                                 <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 via-white to-surface p-4 shadow-xl ring-1 ring-emerald-500/20">
                                     <div className="flex items-center justify-between gap-2 mb-3">
                                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white shadow-xs">
@@ -172,7 +200,9 @@ export default function Home() {
                                                     {primaryBook.title}
                                                 </h3>
                                             </Link>
-                                            <p className="mt-0.5 text-xs text-brand font-medium">Instant PDF Download</p>
+                                            <p className="mt-0.5 text-xs text-brand font-medium">
+                                                Instant PDF Download {primaryBook.pageCount ? `· ${primaryBook.pageCount} Pages` : ''}
+                                            </p>
 
                                             <div className="mt-2 flex items-baseline gap-2">
                                                 <span className="text-2xl font-black text-brand tracking-tight">
@@ -225,7 +255,7 @@ export default function Home() {
                                         <div className="mt-3.5 pt-3 border-t border-line/60">
                                             <p className="text-[11px] font-semibold text-muted mb-1.5">More eBooks to buy:</p>
                                             <div className="flex gap-2 overflow-x-auto pb-1">
-                                                {uniqueProducts.slice(0, 5).map((p, idx) => (
+                                                {uniqueProducts.map((p, idx) => (
                                                     <button
                                                         key={p._id}
                                                         type="button"
