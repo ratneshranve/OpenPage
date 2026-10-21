@@ -41,9 +41,9 @@ function ScrollAndTrack() {
 function SiteLayout() {
     const { error, reload } = useConfig();
     return (
-        <div className="flex min-h-screen flex-col">
+        <div className="flex min-h-screen flex-col w-full max-w-full overflow-x-hidden">
             <Header />
-            <main id="main" className="flex-1">
+            <main id="main" className="flex-1 w-full min-w-0">
                 {error && (
                     <div className="container-page pt-6">
                         <Alert tone="error" title="We are having trouble connecting" action={<Button size="sm" variant="outline" onClick={reload}>Try again</Button>}>

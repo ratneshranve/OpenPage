@@ -332,7 +332,7 @@ export default function Checkout() {
             )}
             {session && (
                 <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_400px]">
-                    <div className="space-y-6">
+                    <div className="space-y-6 min-w-0">
                         {/* Step 1: Customer details */}
                         <section className="card p-6" aria-labelledby="step-email">
                             <div className="flex items-center gap-3">
@@ -506,7 +506,7 @@ export default function Checkout() {
                         </section>
                     </div>
 
-                    <aside className="lg:sticky lg:top-24 lg:self-start">
+                    <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
                         <div className="card space-y-4 p-5">
                             <h2 className="font-semibold">Order summary</h2>
                             <OrderSummary quote={quote} compact />

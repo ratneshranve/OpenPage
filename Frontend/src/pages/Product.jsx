@@ -121,7 +121,7 @@ export default function Product() {
 
             <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
                 {/* Gallery */}
-                <div>
+                <div className="min-w-0">
                     <div className="mx-auto max-w-sm lg:sticky lg:top-24">
                         {images.length ? (
                             <img src={images[activeImage].url} alt={images[activeImage].alt || `${activeImage ? 'Preview page of' : 'Cover of'} ${p.title}`} className="aspect-[3/4] w-full rounded-2xl object-cover shadow-md ring-1 ring-line" />
@@ -129,7 +129,7 @@ export default function Product() {
                             <BookCover title={p.title} className="shadow-md" />
                         )}
                         {images.length > 1 && (
-                            <div className="mt-3 flex gap-2 overflow-x-auto pb-1" role="list" aria-label="Preview images">
+                            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none" role="list" aria-label="Preview images">
                                 {images.map((img, i) => (
                                     <button key={img.url} type="button" onClick={() => setActiveImage(i)} className={`h-20 w-16 shrink-0 overflow-hidden rounded-lg ring-2 ${i === activeImage ? 'ring-accent' : 'ring-transparent'}`} aria-label={`Show image ${i + 1}`} aria-pressed={i === activeImage}>
                                         <img src={img.url} alt="" className="h-full w-full object-cover" />
@@ -146,7 +146,7 @@ export default function Product() {
                 </div>
 
                 {/* Details */}
-                <div>
+                <div className="min-w-0">
                     <div className="flex flex-wrap gap-2">
                         {p.category && (
                             <Link to={`/category/${p.category.slug}`} className="no-underline">

@@ -92,15 +92,16 @@ export default function Home() {
             <Seo title={seo?.homepage?.title || undefined} description={seo?.homepage?.description || undefined} jsonLd={faqLd} />
 
             {/* Pending Payment Recovery Banner */}
+            {/* Pending Payment Recovery Banner */}
             {pendingOrder && (
                 <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 py-3 sm:px-6">
-                    <div className="container-page flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
+                    <div className="container-page flex flex-wrap items-center justify-between gap-3 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-700">
                                 <Clock className="h-5 w-5 animate-pulse" />
                             </span>
-                            <div>
-                                <p className="text-sm font-semibold text-ink">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold text-ink truncate">
                                     Pending payment for Order <span className="font-mono text-brand font-bold">{pendingOrder.orderNumber}</span> ({money(pendingOrder.total, pendingOrder.currency)})
                                 </p>
                                 <p className="text-xs text-muted">
@@ -108,7 +109,7 @@ export default function Home() {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 ml-auto sm:ml-0">
+                        <div className="flex items-center gap-2 ml-auto sm:ml-0 shrink-0">
                             <Button as={Link} to={`/order/${pendingOrder.orderNumber}`} size="sm" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm">
                                 Complete Payment <ArrowRight className="h-4 w-4" />
                             </Button>
@@ -131,17 +132,17 @@ export default function Home() {
             {/* Hero */}
             <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-accent-pale/60 to-white">
                 <div className="container-page grid items-center gap-10 py-10 sm:py-20 lg:grid-cols-2">
-                    <div>
+                    <div className="min-w-0 w-full">
                         {hero.eyebrow && <Badge tone="green">{hero.eyebrow}</Badge>}
-                        <h1 className="mt-3 text-3xl font-extrabold leading-[1.15] tracking-tight sm:text-5xl">{hero.title || 'Practical eBooks that help you work smarter'}</h1>
-                        <p className="mt-3 max-w-xl text-base leading-7 text-ink-soft sm:text-lg sm:leading-8">{hero.subtitle}</p>
+                        <h1 className="mt-3 text-3xl font-extrabold leading-[1.15] tracking-tight sm:text-5xl break-words">{hero.title || 'Practical eBooks that help you work smarter'}</h1>
+                        <p className="mt-3 max-w-xl text-base leading-7 text-ink-soft sm:text-lg sm:leading-8 break-words">{hero.subtitle}</p>
 
                         {/* Mobile Instant Book Showcase Card: visible immediately on mobile without scrolling */}
                         {primaryBook && (
-                            <div className="block lg:hidden my-6">
+                            <div className="block lg:hidden my-6 w-full min-w-0">
                                 {/* Book Switcher Tabs for Mobile */}
                                 {uniqueProducts.length > 1 && (
-                                    <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 scrollbar-none">
+                                    <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1.5 max-w-full scrollbar-none">
                                         {uniqueProducts.map((p, idx) => {
                                             const isSelected = selectedBookIndex === idx;
                                             return (
@@ -155,7 +156,7 @@ export default function Home() {
                                                             : 'bg-white text-ink-soft border border-line hover:border-brand/40 shadow-xs'
                                                     }`}
                                                 >
-                                                    <span className="truncate max-w-[150px]">{p.title}</span>
+                                                    <span className="truncate max-w-[130px] sm:max-w-[150px]">{p.title}</span>
                                                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${
                                                         isSelected ? 'bg-white/20 text-yellow-200' : 'bg-brand/10 text-brand'
                                                     }`}>
@@ -167,22 +168,22 @@ export default function Home() {
                                     </div>
                                 )}
 
-                                <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 via-white to-surface p-4 shadow-xl ring-1 ring-emerald-500/20">
+                                <div className="relative overflow-hidden rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 via-white to-surface p-3.5 sm:p-4 shadow-xl ring-1 ring-emerald-500/20 w-full min-w-0">
                                     <div className="flex items-center justify-between gap-2 mb-3">
-                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white shadow-xs">
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-bold text-white shadow-xs shrink-0">
                                             <Zap className="h-3.5 w-3.5 fill-yellow-300 text-yellow-300" /> Instant Buy
                                         </span>
                                         {primaryBook.ratingAverage > 0 && (
-                                            <span className="flex items-center gap-1 text-xs font-semibold text-ink">
+                                            <span className="flex items-center gap-1 text-xs font-semibold text-ink shrink-0">
                                                 <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                                                 {primaryBook.ratingAverage.toFixed(1)} ({primaryBook.ratingCount || 1})
                                             </span>
                                         )}
                                     </div>
 
-                                    <div className="flex gap-3.5 items-center">
+                                    <div className="flex gap-3 items-center min-w-0">
                                         <Link to={`/ebooks/${primaryBook.slug}`} className="shrink-0 block group">
-                                            <div className="relative w-24 h-32 rounded-xl overflow-hidden shadow-md ring-1 ring-line/80 group-hover:scale-105 transition">
+                                            <div className="relative w-20 h-28 sm:w-24 sm:h-32 rounded-xl overflow-hidden shadow-md ring-1 ring-line/80 group-hover:scale-105 transition">
                                                 {primaryBook.coverImage?.url ? (
                                                     <img src={primaryBook.coverImage.url} alt={primaryBook.title} className="w-full h-full object-cover" />
                                                 ) : (
@@ -196,15 +197,15 @@ export default function Home() {
 
                                         <div className="min-w-0 flex-1">
                                             <Link to={`/ebooks/${primaryBook.slug}`} className="no-underline">
-                                                <h3 className="text-base font-extrabold text-ink leading-snug line-clamp-2 hover:text-brand">
+                                                <h3 className="text-base font-extrabold text-ink leading-snug line-clamp-2 hover:text-brand break-words">
                                                     {primaryBook.title}
                                                 </h3>
                                             </Link>
-                                            <p className="mt-0.5 text-xs text-brand font-medium">
+                                            <p className="mt-0.5 text-xs text-brand font-medium truncate">
                                                 Instant PDF Download {primaryBook.pageCount ? `· ${primaryBook.pageCount} Pages` : ''}
                                             </p>
 
-                                            <div className="mt-2 flex items-baseline gap-2">
+                                            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                                                 <span className="text-2xl font-black text-brand tracking-tight">
                                                     {money(primaryBook.finalPrice, primaryBook.currency)}
                                                 </span>
@@ -227,34 +228,34 @@ export default function Home() {
                                         <button
                                             type="button"
                                             onClick={() => setQuickBuyProduct(primaryBook)}
-                                            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 py-3.5 px-4 font-extrabold text-white text-base shadow-lg shadow-brand/20 active:scale-[0.98] transition cursor-pointer hover:brightness-105"
+                                            className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 via-brand to-emerald-700 py-3.5 px-3 sm:px-4 font-extrabold text-white text-base shadow-lg shadow-brand/20 active:scale-[0.98] transition cursor-pointer hover:brightness-105"
                                         >
-                                            <Zap className="h-5 w-5 fill-yellow-300 text-yellow-300 animate-bounce" />
-                                            <span>Buy Now · {money(primaryBook.finalPrice, primaryBook.currency)}</span>
-                                            <ArrowRight className="h-4 w-4 ml-1" />
+                                            <Zap className="h-5 w-5 fill-yellow-300 text-yellow-300 animate-bounce shrink-0" />
+                                            <span className="truncate">Buy Now · {money(primaryBook.finalPrice, primaryBook.currency)}</span>
+                                            <ArrowRight className="h-4 w-4 ml-1 shrink-0" />
                                         </button>
                                     </div>
 
                                     {/* Security & trust row */}
-                                    <div className="mt-2.5 flex items-center justify-center gap-3 text-[11px] text-muted">
-                                        <span className="flex items-center gap-1 font-medium text-ink-soft">
-                                            <Zap className="h-3 w-3 text-brand" /> Instant UPI QR
+                                    <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[11px] text-muted">
+                                        <span className="inline-flex items-center gap-1 font-medium text-ink-soft whitespace-nowrap">
+                                            <Zap className="h-3 w-3 text-brand shrink-0" /> Instant UPI QR
                                         </span>
-                                        <span>•</span>
-                                        <span className="flex items-center gap-1 font-medium text-ink-soft">
-                                            <Lock className="h-3 w-3 text-brand" /> Instant Access
+                                        <span className="hidden sm:inline">•</span>
+                                        <span className="inline-flex items-center gap-1 font-medium text-ink-soft whitespace-nowrap">
+                                            <Lock className="h-3 w-3 text-brand shrink-0" /> Instant Access
                                         </span>
-                                        <span>•</span>
-                                        <span className="flex items-center gap-1 font-medium text-ink-soft">
-                                            <Check className="h-3 w-3 text-brand" /> No App Needed
+                                        <span className="hidden sm:inline">•</span>
+                                        <span className="inline-flex items-center gap-1 font-medium text-ink-soft whitespace-nowrap">
+                                            <Check className="h-3 w-3 text-brand shrink-0" /> No App Needed
                                         </span>
                                     </div>
 
                                     {/* Switch book pills if multiple books exist */}
                                     {uniqueProducts.length > 1 && (
-                                        <div className="mt-3.5 pt-3 border-t border-line/60">
+                                        <div className="mt-3.5 pt-3 border-t border-line/60 min-w-0">
                                             <p className="text-[11px] font-semibold text-muted mb-1.5">More eBooks to buy:</p>
-                                            <div className="flex gap-2 overflow-x-auto pb-1">
+                                            <div className="flex gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none">
                                                 {uniqueProducts.map((p, idx) => (
                                                     <button
                                                         key={p._id}
@@ -266,7 +267,7 @@ export default function Home() {
                                                                 : 'bg-white text-ink-soft border-line hover:bg-surface'
                                                         }`}
                                                     >
-                                                        {p.title} ({money(p.finalPrice, p.currency)})
+                                                        <span className="max-w-[130px] sm:max-w-[180px] truncate inline-block align-bottom">{p.title}</span> ({money(p.finalPrice, p.currency)})
                                                     </button>
                                                 ))}
                                             </div>
@@ -285,23 +286,23 @@ export default function Home() {
                                 </div>
                             )}
                             {hero.primaryCtaText && (
-                                <Button as={Link} to={hero.primaryCtaLink || '/ebooks'} size="lg" variant={primaryBook ? 'outline' : 'primary'}>
+                                <Button as={Link} to={hero.primaryCtaLink || '/ebooks'} size="lg" variant={primaryBook ? 'outline' : 'primary'} className="w-full sm:w-auto justify-center">
                                     {hero.primaryCtaText} <ArrowRight className="h-4 w-4" />
                                 </Button>
                             )}
                             {hero.secondaryCtaText && (
-                                <Button as={hero.secondaryCtaLink?.startsWith('#') ? 'a' : Link} href={hero.secondaryCtaLink} to={hero.secondaryCtaLink} variant="outline" size="lg">
+                                <Button as={hero.secondaryCtaLink?.startsWith('#') ? 'a' : Link} href={hero.secondaryCtaLink} to={hero.secondaryCtaLink} variant="outline" size="lg" className="w-full sm:w-auto justify-center">
                                     {hero.secondaryCtaText}
                                 </Button>
                             )}
                         </div>
                         <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
-                            <li className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-brand" /> Direct UPI / QR payment</li>
-                            <li className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-brand" /> Instant download link</li>
-                            <li className="flex items-center gap-1.5"><BookOpen className="h-4 w-4 text-brand" /> Re-download any time</li>
+                            <li className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-brand shrink-0" /> Direct UPI / QR payment</li>
+                            <li className="flex items-center gap-1.5"><Zap className="h-4 w-4 text-brand shrink-0" /> Instant download link</li>
+                            <li className="flex items-center gap-1.5"><BookOpen className="h-4 w-4 text-brand shrink-0" /> Re-download any time</li>
                         </ul>
                     </div>
-                    <div className="hidden lg:block">
+                    <div className="hidden lg:block min-w-0">
                         {hero.image ? (
                             <img src={hero.image} alt="" className="mx-auto max-h-[440px] rounded-2xl object-contain" />
                         ) : (
